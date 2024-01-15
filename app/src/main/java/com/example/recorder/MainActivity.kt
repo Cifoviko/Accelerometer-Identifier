@@ -9,6 +9,9 @@ import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.paramsen.noise.Noise
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.abs
@@ -69,7 +72,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val fingerprintBottomDiscardSize: Int = 13 // N_MIN
     private val powerSpectrumFloor: Double = 1e-100    // POWER_SPECTRUM_FLOOR TODO: Could round to 0 in Float
     private val fingerprintMatchingSize: Int = 768     // N_block
-    private val fingerprintMatchingStep: Int = fingerprintMatchingSize
+    private val fingerprintMatchingStep: Int = fingerprintMatchingSize * 3
     private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
 
@@ -127,7 +130,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-    private fun guessTrack() {
+    private suspend fun guessTrack(fingerprintHashesScreenshot: ArrayDeque<Int>) {
         // TODO: Add comment
 
         Log.d("DEVEL", "Guessing track")
@@ -150,7 +153,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             for (segmentStart in 0..<trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
-                    error += (trackInfo.value[segmentStart + id] xor fingerprintHashes[id]).countOneBits()
+                    error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
                 minError = min(minError, error)
             }
@@ -161,6 +164,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     private fun calculateFingerprint() {
         // TODO: Tidy up (and add comments)
         // calculate_fp(?, accelerometerData)
@@ -267,7 +271,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (fingerprintMatchingStepCount == fingerprintMatchingStep) {
             fingerprintMatchingStepCount = 0
             if (fingerprintHashes.size == fingerprintMatchingSize) {
-                guessTrack()
+                val fingerprintHashesScreenshot: ArrayDeque<Int> = fingerprintHashes
+                // TODO: GlobalScope is discouraged
+                GlobalScope.launch {
+                    guessTrack(fingerprintHashesScreenshot)
+                }
             }
         }
     }
