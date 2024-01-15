@@ -9,6 +9,7 @@ import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.paramsen.noise.Noise
+import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -351,37 +352,42 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         dataHz = closestHz
+        lateinit var resource: InputStream
+        // +---------+
+        // | Format: |
+        // | 1. name |
+        // | 2. data |
+        // | 3. name |
+        // | 4. data |
+        // | ...     |
+        // +---------+
 
         if (dataHz == 500) {
-            // +---------+
-            // | Format: |
-            // | 1. name |
-            // | 2. data |
-            // | 3. name |
-            // | 4. data |
-            // | ...     |
-            // +---------+
-            val lines = resources.openRawResource(R.raw.reference_data_500hz).bufferedReader()
-                .use { it.readLines() }
-            // TODO: [W] A resource failed to call close.
+            resource = resources.openRawResource(R.raw.reference_data_500hz)
+        } else if (dataHz == 400) {
+            resource = resources.openRawResource(R.raw.reference_data_400hz)
+        }
 
-            // TODO: remove
-            Log.d("DEVEL", "Size: " + lines.size)
+        val lines = resource.bufferedReader()
+            .use { it.readLines() }
+        // TODO: [W] A resource failed to call close.
 
-            // TODO: Drop frames, move to background (?)
-            referenceData = hashMapOf()
-            for (i in lines.indices step 2) {
-                val trackName: String = lines[i]
-                val data: List<Int> = lines[i + 1].split(' ').map { it.trim().toInt() }
-                referenceData[trackName] = data
-            }
+        // TODO: remove
+        Log.d("DEVEL", "Size: " + lines.size)
 
-            // TODO: remove
-            for (track in referenceData) {
-                Log.d("DEVEL", "Name: " + track.key)
-                Log.d("DEVEL", "Data: " + track.value)
-                break
-            }
+        // TODO: Drop frames, move to background (?)
+        referenceData = hashMapOf()
+        for (i in lines.indices step 2) {
+            val trackName: String = lines[i]
+            val data: List<Int> = lines[i + 1].split(' ').map { it.trim().toInt() }
+            referenceData[trackName] = data
+        }
+
+        // TODO: remove
+        for (track in referenceData) {
+            Log.d("DEVEL", "Name: " + track.key)
+            Log.d("DEVEL", "Data: " + track.value)
+            break
         }
     }
 }
