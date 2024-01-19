@@ -61,12 +61,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +-------------------------+
     // TODO: bad mutex
     private val mutex = Mutex()
+    private val hammingWindow: Array<Double> =
+        Array<Double>(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
     private lateinit var referenceData: HashMap<String, List<Int>> // TODO: Rename
     private var fingerprints = ArrayDeque<Array<Double>>()
     private var fingerprintHashes = ArrayDeque<Int>()
     private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
-
 
     companion object {
         // +---------------------------+
@@ -78,16 +79,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Constants to recognise track |
         // +------------------------------+
         // TODO: Clear
-        private const val blockInputSize: Int = 128              // N_FFT
-        private const val blockInputStep: Int = 8                // N_STEP
-        private const val fingerprintsSize: Int = 12             // N_DEL
-        private const val frequenciesCount: Int = 24             // N_FREQ
-        private const val bandsCount: Int = frequenciesCount + 1 // N_BANDS TODO: (why do we need it..)
-        private const val fingerprintMergingSize: Int = 2        // N_AVG
-        private const val fingerprintBottomDiscardSize: Int = 13 // N_MIN
-        private const val powerSpectrumFloor: Double = 1e-100    // POWER_SPECTRUM_FLOOR TODO: Could round to 0 in Float
-        private const val fingerprintMatchingSize: Int = 768     // N_block
-        private const val fingerprintMatchingStep: Int = fingerprintMatchingSize * 3
+        private const val blockInputSize: Int = 128
+        private const val blockInputStep: Int = 8
+        private const val fingerprintsSize: Int = 12
+        private const val frequenciesCount: Int = 24
+        private const val bandsCount: Int =
+            frequenciesCount + 1 // TODO: (why do we need it..)
+        private const val fingerprintMergingSize: Int = 2
+        private const val fingerprintBottomDiscardSize: Int = 13
+        private const val powerSpectrumFloor: Double =
+            1e-100    // TODO: Could round to 0 in Float (?)
+        private const val fingerprintMatchingSize: Int = 768
     }
 
     // +------------------------------------------------------------------------------------------+
@@ -145,18 +147,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
     private suspend fun guessTrack(fingerprintHashesScreenshot: Array<Int>) {
+        // +-------------------------------+
+        // | Finds closest match in tracks |
+        // +-------------------------------+
+        // TODO: Test accuracy
+
         mutex.lock()
-        // TODO: Add comment
+        var startTime: TimeMark = timeSource.markNow()
 
-        // TODO: Move to background, we drop frames
-        //       And add all tracks
-
-        // Tested on track 'Wonderful world'
-        // Noise gives around 8800 errors
-        // While track is played we have 8500-8700
-        // Underperformed, need further checks
-
-        var string: String = ""
+        var track: String = "NONE"
         // TODO: Use sizeOf
         var minError: Int = 32 * fingerprintMatchingSize
         for (trackInfo in referenceData) {
@@ -167,68 +166,47 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
                 if (minError > error) {
-                    string = "${trackInfo.key} $error"
+                    track = trackInfo.key
                     minError = error
                 }
             }
         }
 
-        trackView.text = string
-        // TODO: Formalize
-        Log.d("DEVEL", "Guessed track $string")
+        // TODO: split view
+        // TODO: We have time leak! Move textView out of here. Return results
+        trackView.text = "$track [$minError]"
+        Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
         mutex.unlock()
     }
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun calculateFingerprint() {
-        // TODO: Tidy up (and add comments)
-        // calculate_fp(?, accelerometerData)
+        // +---------------------------------+
+        // | Calculates fingerprint and it's |
+        // | hash from accelerometer data    |
+        // +---------------------------------+
 
-        // x0 = x_in * w
-        // X0 = abs(np.fft.fft(x0, N_FFT)[: int(N_FFT / 2 + 1)]) ** 2
-        // X0[X0 < POWER_SPECTRUM_FLOOR] = POWER_SPECTRUM_FLOOR  # Avoid zero
+        // TODO: Move to coroutine
 
         // Hamming window
-        val windowedData: FloatArray = FloatArray(Companion.blockInputSize)
+        val windowedData: FloatArray = FloatArray(blockInputSize)
         for (id in accelerometerData.indices) {
-            //TODO: Pre-calc
-            // Hamming value w(id)
-            val w: Double = 0.54 - 0.46 * cos((2 * PI * id) / (Companion.blockInputSize - 1))
-            windowedData[id] = (accelerometerData[id] * w).toFloat()
-            // TODO: we have conversion to float (probably ok)
+            windowedData[id] = (accelerometerData[id] * hammingWindow[id]).toFloat()
         }
 
         // FFT
-        val noise: Noise = Noise.real(Companion.blockInputSize)
-        val dst = FloatArray(Companion.blockInputSize + 2)
+        val noise: Noise = Noise.real(blockInputSize)
+        val dst = FloatArray(blockInputSize + 2)
 
         val fft: FloatArray = noise.fft(windowedData, dst)
         // TODO: fft or dst they are different, but I dunno why
         //       I mean they are kinda similar but why would we
         //       need two outputs..
 
-        // TODO: Delete
-        /*
-        Log.d("DEVEL", "fft size: ${fft.size}")
-        Log.d("DEVEL", "dst size: ${dst.size}")
-
-        var string: String = "fft: "
-        for (id in fft.indices) {
-            string += fft[id].toString()
-            string += " "
-        }
-        Log.d("DEVEL", string)
-        string = "dst: "
-        for (id in dst.indices) {
-            string += dst[id].toString()
-            string += " "
-        }
-        Log.d("DEVEL", string)
-        */
-
         // Extracting Data from FFT
-        val realFftSize = Companion.blockInputSize / 2 + 1
-        val x0: Array<Double> = Array<Double>(realFftSize) { 0.0 } // TODO: Rename (I dunno how to call)
+        val realFftSize = blockInputSize / 2 + 1
+        val x0: Array<Double> =
+            Array<Double>(realFftSize) { 0.0 } // TODO: Rename (I dunno how to call)
         for (id in x0.indices) {
             x0[id] = fft[id * 2].toDouble()
             x0[id] *= x0[id]
@@ -257,13 +235,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         fingerprints.addLast(fingerprint)
 
-        /*var string: String = "New fingerprint: "
-        for (id in fingerprint.indices) {
-            string += fingerprint[id].toString()
-            string += " "
-        }
-        Log.d("DEVEL", string)*/
-
         // Calculating fingerprint hash
         var fingerprintHash: Int = 0
         for (id in 0..<frequenciesCount) {
@@ -280,19 +251,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             fingerprintHashes.removeFirst()
         }
         fingerprintHashes.addLast(fingerprintHash)
-        //Log.d("DEVEL", "New hash: $fingerprintHash")
 
         // Guessing the song
-        ++fingerprintMatchingStepCount
-        // TODO: fix (or not, but then be more accurate with mutex)
+        // TODO: We can lose mutex
         if (!mutex.isLocked) {
-        //if (fingerprintMatchingStepCount == fingerprintMatchingStep) {
-            fingerprintMatchingStepCount = 0
             if (fingerprintHashes.size == fingerprintMatchingSize) {
-                var fingerprintHashesScreenshot: Array<Int> = Array<Int>(fingerprintMatchingSize) {0}
+                var fingerprintHashesScreenshot: Array<Int> =
+                    Array<Int>(fingerprintMatchingSize) { 0 }
                 fingerprintHashes.toArray(fingerprintHashesScreenshot)
                 // TODO: Formalize
-                Log.d("DEVEL", "Guessing track + ${fingerprintHashesScreenshot.size}")
+                Log.d("DEVEL", "Guessing track")
 
                 // TODO: GlobalScope is discouraged
                 GlobalScope.launch {
@@ -308,12 +276,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Accelerometer to the list |
         // +---------------------------+
 
-        if (Companion.blockInputSize == accelerometerData.size) {
+        if (blockInputSize == accelerometerData.size) {
             accelerometerData.removeFirst()
         }
         accelerometerData.addLast(value)
 
-        if (Companion.blockInputSize == accelerometerData.size) {
+        if (blockInputSize == accelerometerData.size) {
             ++blockInputStepCount
 
             if (blockInputStepCount == blockInputStep) {
@@ -402,8 +370,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .use { it.readLines() }
         // TODO: [W] A resource failed to call close.
 
-        // TODO: remove
-        Log.d("DEVEL", "Size: " + lines.size)
+        Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
         // TODO: Drop frames, move to background (?)
         referenceData = hashMapOf()
@@ -413,11 +380,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             referenceData[trackName] = data
         }
 
-        // TODO: remove
-        for (track in referenceData) {
-            Log.d("DEVEL", "Name: " + track.key)
-            Log.d("DEVEL", "Data: " + track.value)
-            break
-        }
+        Log.d("DEVEL", "Extracted Data")
     }
 }
