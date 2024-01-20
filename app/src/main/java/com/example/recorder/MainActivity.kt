@@ -343,7 +343,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | <- referenceData               |
         // +--------------------------------+
 
-        val dataHzList = listOf<Int>(400, 500)
+        val dataHzList = listOf<Int>(400, 415, 500)
 
         var closestHz: Int = dataHzList[0]
         for (hz in dataHzList) {
