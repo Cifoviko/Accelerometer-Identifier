@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val mutex = Mutex()
     private val hammingWindow: Array<Double> =
         Array<Double>(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
-    private lateinit var referenceData: HashMap<String, List<Int>> // TODO: Rename
+    private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
     private var fingerprints = ArrayDeque<Array<Double>>()
     private var fingerprintHashes = ArrayDeque<Int>()
     private var fingerprintMatchingStepCount: Int = 0
@@ -146,14 +146,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-    private suspend fun guessTrack(fingerprintHashesScreenshot: Array<Int>) {
+    private suspend fun guessTrack(fingerprintHashesScreenshot: IntArray) {
         // +-------------------------------+
         // | Finds closest match in tracks |
         // +-------------------------------+
         // TODO: Test accuracy
 
         mutex.lock()
-        var startTime: TimeMark = timeSource.markNow()
+        val startTime: TimeMark = timeSource.markNow()
 
         var track: String = "NONE"
         // TODO: Use sizeOf
@@ -174,7 +174,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // TODO: split view
         // TODO: We have time leak! Move textView out of here. Return results
-        trackView.text = "$track [$minError]"
+        // trackView.text = "$track [$minError]"
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
         mutex.unlock()
     }
@@ -256,9 +256,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: We can lose mutex
         if (!mutex.isLocked) {
             if (fingerprintHashes.size == fingerprintMatchingSize) {
-                var fingerprintHashesScreenshot: Array<Int> =
+                val buffer: Array<Int> =
                     Array<Int>(fingerprintMatchingSize) { 0 }
-                fingerprintHashes.toArray(fingerprintHashesScreenshot)
+                fingerprintHashes.toArray(buffer)
+
+                val fingerprintHashesScreenshot: IntArray = buffer.toIntArray()
+
                 // TODO: Formalize
                 Log.d("DEVEL", "Guessing track")
 
@@ -362,6 +365,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         if (dataHz == 500) {
             resource = resources.openRawResource(R.raw.reference_data_500hz)
+        } else if (dataHz == 415) {
+            resource = resources.openRawResource(R.raw.reference_data_415hz)
         } else if (dataHz == 400) {
             resource = resources.openRawResource(R.raw.reference_data_400hz)
         }
@@ -377,7 +382,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         for (i in lines.indices step 2) {
             val trackName: String = lines[i]
             val data: List<Int> = lines[i + 1].split(' ').map { it.trim().toInt() }
-            referenceData[trackName] = data
+            referenceData[trackName] = data.toIntArray()
         }
 
         Log.d("DEVEL", "Extracted Data")
