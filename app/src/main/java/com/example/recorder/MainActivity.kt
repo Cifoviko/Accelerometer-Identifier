@@ -61,10 +61,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +-------------------------+
     // TODO: bad mutex
     private val mutex = Mutex()
-    private val hammingWindow: Array<Double> =
-        Array<Double>(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
+    private val hammingWindow: DoubleArray =
+        DoubleArray(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
     private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
-    private var fingerprints = ArrayDeque<Array<Double>>()
+    private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = ArrayDeque<Int>()
     private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
@@ -111,7 +111,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onDestroy() {
-        sensorManager.unregisterListener(this);
+        sensorManager.unregisterListener(this)
         super.onDestroy()
     }
 
@@ -205,8 +205,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Extracting Data from FFT
         val realFftSize = blockInputSize / 2 + 1
-        val x0: Array<Double> =
-            Array<Double>(realFftSize) { 0.0 } // TODO: Rename (I dunno how to call)
+        val x0: DoubleArray =
+            DoubleArray(realFftSize) { 0.0 } // TODO: Rename (I dunno how to call)
         for (id in x0.indices) {
             x0[id] = fft[id * 2].toDouble()
             x0[id] *= x0[id]
@@ -216,12 +216,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         // Band split and energy calculation
-        val bandEdges: Array<Int> =
-            Array<Int>(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
-        val bandScale: Array<Double> =
-            Array<Double>(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
+        val bandEdges: IntArray =
+            IntArray(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
+        val bandScale: DoubleArray =
+            DoubleArray(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
 
-        val fingerprint: Array<Double> = Array<Double>(bandsCount) { 0.0 }
+        val fingerprint: DoubleArray = DoubleArray(bandsCount) { 0.0 }
         for (fingerprintId in 0..<bandsCount) {
             for (id in bandEdges[fingerprintId]..<bandEdges[fingerprintId + 1]) {
                 fingerprint[fingerprintId] += x0[id]
@@ -256,11 +256,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: We can lose mutex
         if (!mutex.isLocked) {
             if (fingerprintHashes.size == fingerprintMatchingSize) {
-                val buffer: Array<Int> =
-                    Array<Int>(fingerprintMatchingSize) { 0 }
-                fingerprintHashes.toArray(buffer)
-
-                val fingerprintHashesScreenshot: IntArray = buffer.toIntArray()
+                val fingerprintHashesScreenshot: IntArray = fingerprintHashes.toIntArray()
 
                 // TODO: Formalize
                 Log.d("DEVEL", "Guessing track")
