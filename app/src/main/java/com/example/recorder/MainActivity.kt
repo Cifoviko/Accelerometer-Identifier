@@ -17,6 +17,7 @@ import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.*
 import kotlin.time.Duration.Companion.seconds
@@ -179,7 +180,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: split view
         // TODO: We have time leak! Move textView out of here. Return results
         // trackView.text = "$track [$minError]"
-        Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
+        Log.d("TESTING", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
         mutex.unlock()
     }
 
@@ -190,13 +191,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | hash from accelerometer data    |
         // +---------------------------------+
 
-        // TODO: Move to coroutine
+        // TODO: Move to coroutine (?)
+
+        val startTime: TimeMark = timeSource.markNow()
 
         // Hamming window
-        val windowedData: FloatArray = FloatArray(blockInputSize)
-        for (id in accelerometerData.indices) {
-            windowedData[id] = (accelerometerData[id] * hammingWindow[id]).toFloat()
-        }
+        val windowedData: FloatArray =
+            FloatArray(blockInputSize) { (accelerometerData[it] * hammingWindow[it]).toFloat() }
 
         // FFT
         val noise: Noise = Noise.real(blockInputSize)
@@ -210,14 +211,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Extracting Data from FFT
         val realFftSize = blockInputSize / 2 + 1
         val x0: DoubleArray =
-            DoubleArray(realFftSize) { 0.0 } // TODO: Rename (I dunno how to call)
-        for (id in x0.indices) {
-            x0[id] = fft[id * 2].toDouble()
-            x0[id] *= x0[id]
-            if (x0[id] < powerSpectrumFloor) {
-                x0[id] = powerSpectrumFloor
-            }
-        }
+            DoubleArray(realFftSize) {
+                max(
+                    Companion.powerSpectrumFloor,
+                    (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
+                )
+            } // TODO: Rename (I dunno how to call)
 
         // Band split and energy calculation
         val fingerprint: DoubleArray = DoubleArray(bandsCount) { 0.0 }
@@ -251,6 +250,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         fingerprintHashes.addLast(fingerprintHash)
 
+        // Log.d("DEVEL", "Pre calculation time spent: ${startTime.elapsedNow()}")
+
         // Guessing the song
         // TODO: We can lose mutex
         if (!mutex.isLocked) {
@@ -258,7 +259,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val fingerprintHashesScreenshot: IntArray = fingerprintHashes.toIntArray()
 
                 // TODO: Formalize
-                Log.d("DEVEL", "Guessing track")
+                Log.d("TESTING", "Guessing track")
 
                 // TODO: GlobalScope is discouraged
                 GlobalScope.launch {
@@ -358,6 +359,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | ...     |
         // +---------+
 
+        val startTime: TimeMark = timeSource.markNow()
+
         if (dataHz == 500) {
             resource = resources.openRawResource(R.raw.reference_data_500hz)
         } else if (dataHz == 415) {
@@ -370,7 +373,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .use { it.readLines() }
         // TODO: [W] A resource failed to call close.
 
-        Log.d("DEVEL", "Read file, tracks: " + lines.size)
+        Log.d("TESTING", "Read file, tracks: " + lines.size)
 
         // TODO: Drop frames, move to background (?)
         referenceData = hashMapOf()
@@ -380,6 +383,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             referenceData[trackName] = data.toIntArray()
         }
 
-        Log.d("DEVEL", "Extracted Data")
+        Log.d("TESTING", "Extracted Data\nTime spent: ${startTime.elapsedNow()}")
     }
 }
