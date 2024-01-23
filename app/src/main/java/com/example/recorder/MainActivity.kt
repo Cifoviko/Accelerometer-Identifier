@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private val timeSource = TimeSource.Monotonic
 
-    // TODO("Fix naming")
+    // TODO: Fix naming
     private lateinit var text0: TextView
     private lateinit var text1: TextView
     private lateinit var text2: TextView
@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +--------------------+
     // | Accelerometer Data |
     // +--------------------+
-    private var accelerometerData = ArrayDeque<Double>() // TODO: Try manual deq on DoubleArray
+    private var accelerometerData = DoubleArray(blockInputSize)
     private var accelerometerX: Double = 0.0
     private var accelerometerY: Double = 0.0
     private var accelerometerZ: Double = 0.0
@@ -73,9 +73,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +-------------------------+
     private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
     private var fingerprints = ArrayDeque<DoubleArray>()
-    private var fingerprintHashes = ArrayDeque<Int>() // TODO: Try manual deq on IntArray
+    private var fingerprintHashes = IntArray(fingerprintMatchingSize)
     // private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
+    private var isLoadedData: Boolean = false
     private val mutex = Mutex() // TODO: bad mutex
 
     // +----------------------+
@@ -165,6 +166,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // TODO: Test accuracy
         // TODO: Catch top k matches
+        // TODO: We lose power, after a little calculations became slower and slower
 
         mutex.lock()
 
@@ -255,19 +257,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         // Saving fingerprint hash
-        if (fingerprintHashes.size == fingerprintMatchingSize) {
-            fingerprintHashes.removeFirst()
+        for (id in 0..<(fingerprintHashes.size - 1)) {
+            fingerprintHashes[id] = fingerprintHashes[id + 1]
         }
-        fingerprintHashes.addLast(fingerprintHash)
+        fingerprintHashes[fingerprintHashes.lastIndex] = fingerprintHash
 
+        // Saving time to calculate average fingerprint calculation time
         fingerprintCalculationTime += startTime.elapsedNow()
         ++fingerprintCalculationCount
 
         // Guessing the song
         // TODO: We can lose mutex
-        if (!mutex.isLocked) {
+        if (isLoadedData && !mutex.isLocked) {
             if (fingerprintHashes.size == fingerprintMatchingSize) {
-                val fingerprintHashesScreenshot: IntArray = fingerprintHashes.toIntArray()
+                val fingerprintHashesScreenshot: IntArray = fingerprintHashes
 
                 // Calculating average fingerprint calculation time
                 Log.d(
@@ -293,11 +296,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Accelerometer to the list |
         // +---------------------------+
 
-        if (blockInputSize == accelerometerData.size) {
-            accelerometerData.removeFirst()
+        // Saving measurement
+        for (id in 0..<(accelerometerData.size - 1)) {
+            accelerometerData[id] = accelerometerData[id + 1]
         }
-        accelerometerData.addLast(value)
+        accelerometerData[accelerometerData.lastIndex] = value
 
+        // Checking to calculate fingerprint
         if (blockInputSize == accelerometerData.size) {
             ++blockInputStepCount
 
@@ -412,6 +417,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             referenceData[trackName] = data.toIntArray()
         }
 
+        isLoadedData = true
         Log.d("DEVEL", "Extracted Data\nTime spent: ${startTime.elapsedNow()}")
     }
 }
