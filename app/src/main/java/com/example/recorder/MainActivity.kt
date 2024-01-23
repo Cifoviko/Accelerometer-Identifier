@@ -339,7 +339,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | <- referenceData               |
         // +--------------------------------+
 
-        val dataHzList = listOf<Int>(400, 415, 500)
+        val dataHzList = listOf<Int>(400, 415, 470, 500)
 
         var closestHz: Int = dataHzList[0]
         for (hz in dataHzList) {
@@ -361,12 +361,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val startTime: TimeMark = timeSource.markNow()
 
-        if (dataHz == 500) {
-            resource = resources.openRawResource(R.raw.reference_data_500hz)
-        } else if (dataHz == 415) {
-            resource = resources.openRawResource(R.raw.reference_data_415hz)
-        } else if (dataHz == 400) {
-            resource = resources.openRawResource(R.raw.reference_data_400hz)
+        when (dataHz) {
+            500 -> {
+                resource = resources.openRawResource(R.raw.reference_data_500hz)
+            }
+            470 -> {
+                resource = resources.openRawResource(R.raw.reference_data_470hz)
+            }
+            415 -> {
+                resource = resources.openRawResource(R.raw.reference_data_415hz)
+            }
+            400 -> {
+                resource = resources.openRawResource(R.raw.reference_data_400hz)
+            }
         }
 
         val lines = resource.bufferedReader()
