@@ -78,10 +78,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var referenceDataHashes: HashMap<String, IntArray>
     private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = IntArray(fingerprintMatchingSize)
-    // private var fingerprintMatchingStepCount: Int = 0
+    private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
     private var isLoadedData: AtomicBoolean = AtomicBoolean(false)
-    private val mutex = Mutex() // TODO: bad mutex
 
     // +----------------------+
     // | Vars for development |
@@ -107,6 +106,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val fingerprintBottomDiscardSize: Int = 13
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
+        private const val fingerprintMatchingStep: Int = 768
     }
 
     // +------------------------------------------------------------------------------------------+
@@ -180,8 +180,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
-        mutex.lock()
-
         // For DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
@@ -204,7 +202,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // TODO: print results on screen
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
-        mutex.unlock()
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -280,8 +277,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Guessing the song
         // TODO: We can lose mutex
-        if (isLoadedData.get() && !mutex.isLocked) {
-            if (fingerprintHashes.size == fingerprintMatchingSize) {
+        if (fingerprintMatchingStepCount == fingerprintMatchingStep) {
+            fingerprintMatchingStepCount = 0
+
+            if (isLoadedData.get()) {
                 val fingerprintHashesScreenshot: IntArray = fingerprintHashes
 
                 // Calculating average fingerprint calculation time
@@ -301,6 +300,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
             }
         }
+        ++fingerprintMatchingStepCount
     }
 
     private fun addMeasurement(value: Double) {
