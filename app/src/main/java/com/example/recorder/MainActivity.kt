@@ -1,5 +1,6 @@
 package com.example.recorder
 
+import android.annotation.SuppressLint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -18,7 +19,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.time.*
 import kotlin.time.Duration.Companion.seconds
 
@@ -73,7 +73,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
     private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = ArrayDeque<Int>() // TODO: Try manual deq on IntArray
-    private var fingerprintMatchingStepCount: Int = 0
+    // private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
     private val mutex = Mutex() // TODO: bad mutex
 
@@ -164,13 +164,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // For DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
-        var track: String = "NONE"
+        var track = "NONE"
         // TODO: Use sizeOf instead of 32
         var minError: Int = 32 * fingerprintMatchingSize
         for (trackInfo in referenceData) {
             // TODO: Add time recognition
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
-                var error: Int = 0
+                var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
@@ -197,11 +197,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: Move to coroutine (?)
 
         // for DEBUG
-        val startTime: TimeMark = timeSource.markNow()
+        // val startTime: TimeMark = timeSource.markNow()
 
         // Hamming window
-        val windowedData: FloatArray =
-            FloatArray(blockInputSize) { (accelerometerData[it] * hammingWindow[it]).toFloat() }
+        val windowedData = FloatArray(blockInputSize) { (accelerometerData[it] * hammingWindow[it]).toFloat() }
 
         // FFT
         val noise: Noise = Noise.real(blockInputSize)
@@ -214,19 +213,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Extracting Data from FFT
         val realFftSize = blockInputSize / 2 + 1
-        val x0: DoubleArray =
-            DoubleArray(realFftSize) {
-                max(
-                    Companion.powerSpectrumFloor,
-                    (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
-                )
-            } // TODO: Rename (I dunno how to call)
+        val magnitude = DoubleArray(realFftSize) { max(powerSpectrumFloor, (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())) } // TODO: Rename (I dunno how to call)
 
         // Band split and energy calculation
-        val fingerprint: DoubleArray = DoubleArray(bandsCount) { 0.0 }
+        val fingerprint = DoubleArray(bandsCount) { 0.0 }
         for (fingerprintId in 0..<bandsCount) {
             for (id in bandEdges[fingerprintId]..<bandEdges[fingerprintId + 1]) {
-                fingerprint[fingerprintId] += x0[id]
+                fingerprint[fingerprintId] += magnitude[id]
             }
             fingerprint[fingerprintId] *= bandScale[fingerprintId]
         }
@@ -238,7 +231,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         fingerprints.addLast(fingerprint)
 
         // Calculating fingerprint hash
-        var fingerprintHash: Int = 0
+        var fingerprintHash = 0
         for (id in 0..<frequenciesCount) {
             // TODO: Rename or better, we can simplify code
             val difference =
@@ -312,6 +305,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         startPull = timeSource.markNow()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun updateText() { // TODO: Rename
         // +------------------------------------+
         // | Updating sensor info on the screen |
@@ -343,7 +337,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | <- referenceData               |
         // +--------------------------------+
 
-        val dataHzList = listOf<Int>(400, 415, 470, 500)
+        val dataHzList = listOf(400, 415, 470, 500)
 
         var closestHz: Int = dataHzList[0]
         for (hz in dataHzList) {
