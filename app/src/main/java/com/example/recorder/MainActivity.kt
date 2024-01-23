@@ -20,6 +20,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.time.*
+import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -76,6 +77,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
     private val mutex = Mutex() // TODO: bad mutex
+
+    // +----------------------+
+    // | Vars for development |
+    // +----------------------+
+    private var fingerprintCalculationCount: Int = 0
+    private var fingerprintCalculationTime: Duration = ZERO
 
     companion object {
         // +---------------------------+
@@ -182,7 +189,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         // TODO: print results on screen
-        Log.d("TESTING", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
+        Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
         mutex.unlock()
     }
 
@@ -197,10 +204,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: Move to coroutine (?)
 
         // for DEBUG
-        // val startTime: TimeMark = timeSource.markNow()
+        val startTime: TimeMark = timeSource.markNow()
 
         // Hamming window
-        val windowedData = FloatArray(blockInputSize) { (accelerometerData[it] * hammingWindow[it]).toFloat() }
+        val windowedData =
+            FloatArray(blockInputSize) { (accelerometerData[it] * hammingWindow[it]).toFloat() }
 
         // FFT
         val noise: Noise = Noise.real(blockInputSize)
@@ -213,7 +221,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Extracting Data from FFT
         val realFftSize = blockInputSize / 2 + 1
-        val magnitude = DoubleArray(realFftSize) { max(powerSpectrumFloor, (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())) } // TODO: Rename (I dunno how to call)
+        val magnitude = DoubleArray(realFftSize) {
+            max(
+                powerSpectrumFloor,
+                (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
+            )
+        } // TODO: Rename (I dunno how to call)
 
         // Band split and energy calculation
         val fingerprint = DoubleArray(bandsCount) { 0.0 }
@@ -247,7 +260,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         fingerprintHashes.addLast(fingerprintHash)
 
-        // Log.d("DEVEL", "Pre calculation time spent: ${startTime.elapsedNow()}")
+        fingerprintCalculationTime += startTime.elapsedNow()
+        ++fingerprintCalculationCount
 
         // Guessing the song
         // TODO: We can lose mutex
@@ -255,8 +269,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (fingerprintHashes.size == fingerprintMatchingSize) {
                 val fingerprintHashesScreenshot: IntArray = fingerprintHashes.toIntArray()
 
-                // TODO: Formalize
-                Log.d("TESTING", "Guessing track")
+                // Calculating average fingerprint calculation time
+                Log.d(
+                    "DEVEL",
+                    "Average fingerprint calculation time: ${fingerprintCalculationTime / fingerprintCalculationCount}"
+                )
+                fingerprintCalculationTime = ZERO
+                fingerprintCalculationCount = 0
+
+                Log.d("DEVEL", "Guessing track")
 
                 // TODO: GlobalScope is discouraged
                 GlobalScope.launch {
@@ -363,12 +384,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             500 -> {
                 resource = resources.openRawResource(R.raw.reference_data_500hz)
             }
+
             470 -> {
                 resource = resources.openRawResource(R.raw.reference_data_470hz)
             }
+
             415 -> {
                 resource = resources.openRawResource(R.raw.reference_data_415hz)
             }
+
             400 -> {
                 resource = resources.openRawResource(R.raw.reference_data_400hz)
             }
@@ -378,7 +402,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .use { it.readLines() }
         // TODO: [W] A resource failed to call close.
 
-        Log.d("TESTING", "Read file, tracks: " + lines.size)
+        Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
         // TODO: Drop frames, move to background (?)
         referenceData = hashMapOf()
@@ -388,6 +412,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             referenceData[trackName] = data.toIntArray()
         }
 
-        Log.d("TESTING", "Extracted Data\nTime spent: ${startTime.elapsedNow()}")
+        Log.d("DEVEL", "Extracted Data\nTime spent: ${startTime.elapsedNow()}")
     }
 }
