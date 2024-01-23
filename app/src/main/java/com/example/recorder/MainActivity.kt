@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +--------------------+
     // | Accelerometer Data |
     // +--------------------+
-    private var accelerometerData = ArrayDeque<Double>()
+    private var accelerometerData = ArrayDeque<Double>() // TODO: Try manual deq on DoubleArray
     private var accelerometerX: Double = 0.0
     private var accelerometerY: Double = 0.0
     private var accelerometerZ: Double = 0.0
@@ -51,28 +51,31 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +----------------------+
     // | Vars to calculate Hz |
     // +----------------------+
+    private lateinit var startPull: TimeMark
     private var isHzInitialized: Boolean = false
     private var measurements: Int = 0
     private var calculatedHz: Double = 0.0
     private var dataHz: Int = 0
-    private lateinit var startPull: TimeMark
 
-    // +-------------------------+
-    // | Vars to recognise track |
-    // +-------------------------+
-    // TODO: bad mutex
-    private val mutex = Mutex()
+    // +-----------------------------------------+
+    // | Pre calculations to create fingerprints |
+    // +-----------------------------------------+
     private val hammingWindow: DoubleArray =
         DoubleArray(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
     private val bandEdges: IntArray =
         IntArray(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
     private val bandScale: DoubleArray =
         DoubleArray(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
+
+    // +-------------------------+
+    // | Vars to recognise track |
+    // +-------------------------+
     private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
     private var fingerprints = ArrayDeque<DoubleArray>()
-    private var fingerprintHashes = ArrayDeque<Int>()
+    private var fingerprintHashes = ArrayDeque<Int>() // TODO: Try manual deq on IntArray
     private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
+    private val mutex = Mutex() // TODO: bad mutex
 
     companion object {
         // +---------------------------+
@@ -83,17 +86,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // +------------------------------+
         // | Constants to recognise track |
         // +------------------------------+
-        // TODO: Clear
         private const val blockInputSize: Int = 128
         private const val blockInputStep: Int = 8
         private const val fingerprintsSize: Int = 12
         private const val frequenciesCount: Int = 24
-        private const val bandsCount: Int =
-            frequenciesCount + 1 // TODO: (why do we need it..)
+        private const val bandsCount: Int = frequenciesCount + 1
         private const val fingerprintMergingSize: Int = 2
         private const val fingerprintBottomDiscardSize: Int = 13
-        private const val powerSpectrumFloor: Double =
-            1e-100    // TODO: Could round to 0 in Float (?)
+        private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
     }
 
@@ -155,13 +155,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // +-------------------------------+
         // | Finds closest match in tracks |
         // +-------------------------------+
+
         // TODO: Test accuracy
+        // TODO: Catch top k matches
 
         mutex.lock()
+
+        // For DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
         var track: String = "NONE"
-        // TODO: Use sizeOf
+        // TODO: Use sizeOf instead of 32
         var minError: Int = 32 * fingerprintMatchingSize
         for (trackInfo in referenceData) {
             // TODO: Add time recognition
@@ -177,22 +181,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        // TODO: split view
-        // TODO: We have time leak! Move textView out of here. Return results
-        // trackView.text = "$track [$minError]"
+        // TODO: print results on screen
         Log.d("TESTING", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
         mutex.unlock()
     }
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun calculateFingerprint() {
-        // +---------------------------------+
-        // | Calculates fingerprint and it's |
-        // | hash from accelerometer data    |
-        // +---------------------------------+
+        // +----------------------------------+
+        // | Calculates fingerprint and it's  |
+        // | hash from accelerometer data and |
+        // | if needed tries to guess track   |
+        // +----------------------------------+
 
         // TODO: Move to coroutine (?)
 
+        // for DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
         // Hamming window
@@ -205,7 +209,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val fft: FloatArray = noise.fft(windowedData, dst)
         // TODO: fft or dst they are different, but I dunno why
-        //       I mean they are kinda similar but why would we
+        //       I mean they are really similar, but why would we
         //       need two outputs..
 
         // Extracting Data from FFT
