@@ -1,5 +1,6 @@
 package com.example.recorder
 
+import android.annotation.SuppressLint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -17,8 +18,9 @@ import java.io.InputStream
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.min
+import kotlin.math.max
 import kotlin.time.*
+import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -42,7 +44,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +--------------------+
     // | Accelerometer Data |
     // +--------------------+
-    private var accelerometerData = ArrayDeque<Double>()
+    private var accelerometerData = ArrayDeque<Double>() // TODO: Try manual deq on DoubleArray
     private var accelerometerX: Double = 0.0
     private var accelerometerY: Double = 0.0
     private var accelerometerZ: Double = 0.0
@@ -50,24 +52,37 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +----------------------+
     // | Vars to calculate Hz |
     // +----------------------+
+    private lateinit var startPull: TimeMark
     private var isHzInitialized: Boolean = false
     private var measurements: Int = 0
     private var calculatedHz: Double = 0.0
     private var dataHz: Int = 0
-    private lateinit var startPull: TimeMark
+
+    // +-----------------------------------------+
+    // | Pre calculations to create fingerprints |
+    // +-----------------------------------------+
+    private val hammingWindow: DoubleArray =
+        DoubleArray(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
+    private val bandEdges: IntArray =
+        IntArray(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
+    private val bandScale: DoubleArray =
+        DoubleArray(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
 
     // +-------------------------+
     // | Vars to recognise track |
     // +-------------------------+
-    // TODO: bad mutex
-    private val mutex = Mutex()
-    private val hammingWindow: DoubleArray =
-        DoubleArray(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
     private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
     private var fingerprints = ArrayDeque<DoubleArray>()
-    private var fingerprintHashes = ArrayDeque<Int>()
-    private var fingerprintMatchingStepCount: Int = 0
+    private var fingerprintHashes = ArrayDeque<Int>() // TODO: Try manual deq on IntArray
+    // private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
+    private val mutex = Mutex() // TODO: bad mutex
+
+    // +----------------------+
+    // | Vars for development |
+    // +----------------------+
+    private var fingerprintCalculationCount: Int = 0
+    private var fingerprintCalculationTime: Duration = ZERO
 
     companion object {
         // +---------------------------+
@@ -78,17 +93,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // +------------------------------+
         // | Constants to recognise track |
         // +------------------------------+
-        // TODO: Clear
         private const val blockInputSize: Int = 128
         private const val blockInputStep: Int = 8
         private const val fingerprintsSize: Int = 12
         private const val frequenciesCount: Int = 24
-        private const val bandsCount: Int =
-            frequenciesCount + 1 // TODO: (why do we need it..)
+        private const val bandsCount: Int = frequenciesCount + 1
         private const val fingerprintMergingSize: Int = 2
         private const val fingerprintBottomDiscardSize: Int = 13
-        private const val powerSpectrumFloor: Double =
-            1e-100    // TODO: Could round to 0 in Float (?)
+        private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
     }
 
@@ -150,18 +162,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // +-------------------------------+
         // | Finds closest match in tracks |
         // +-------------------------------+
+
         // TODO: Test accuracy
+        // TODO: Catch top k matches
 
         mutex.lock()
+
+        // For DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
-        var track: String = "NONE"
-        // TODO: Use sizeOf
+        var track = "NONE"
+        // TODO: Use sizeOf instead of 32
         var minError: Int = 32 * fingerprintMatchingSize
         for (trackInfo in referenceData) {
             // TODO: Add time recognition
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
-                var error: Int = 0
+                var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
@@ -172,27 +188,27 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        // TODO: split view
-        // TODO: We have time leak! Move textView out of here. Return results
-        // trackView.text = "$track [$minError]"
+        // TODO: print results on screen
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
         mutex.unlock()
     }
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun calculateFingerprint() {
-        // +---------------------------------+
-        // | Calculates fingerprint and it's |
-        // | hash from accelerometer data    |
-        // +---------------------------------+
+        // +----------------------------------+
+        // | Calculates fingerprint and it's  |
+        // | hash from accelerometer data and |
+        // | if needed tries to guess track   |
+        // +----------------------------------+
 
-        // TODO: Move to coroutine
+        // TODO: Move to coroutine (?)
+
+        // for DEBUG
+        val startTime: TimeMark = timeSource.markNow()
 
         // Hamming window
-        val windowedData: FloatArray = FloatArray(blockInputSize)
-        for (id in accelerometerData.indices) {
-            windowedData[id] = (accelerometerData[id] * hammingWindow[id]).toFloat()
-        }
+        val windowedData =
+            FloatArray(blockInputSize) { (accelerometerData[it] * hammingWindow[it]).toFloat() }
 
         // FFT
         val noise: Noise = Noise.real(blockInputSize)
@@ -200,31 +216,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val fft: FloatArray = noise.fft(windowedData, dst)
         // TODO: fft or dst they are different, but I dunno why
-        //       I mean they are kinda similar but why would we
+        //       I mean they are really similar, but why would we
         //       need two outputs..
 
         // Extracting Data from FFT
         val realFftSize = blockInputSize / 2 + 1
-        val x0: DoubleArray =
-            DoubleArray(realFftSize) { 0.0 } // TODO: Rename (I dunno how to call)
-        for (id in x0.indices) {
-            x0[id] = fft[id * 2].toDouble()
-            x0[id] *= x0[id]
-            if (x0[id] < powerSpectrumFloor) {
-                x0[id] = powerSpectrumFloor
-            }
-        }
+        val magnitude = DoubleArray(realFftSize) {
+            max(
+                powerSpectrumFloor,
+                (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
+            )
+        } // TODO: Rename (I dunno how to call)
 
         // Band split and energy calculation
-        val bandEdges: IntArray =
-            IntArray(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
-        val bandScale: DoubleArray =
-            DoubleArray(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
-
-        val fingerprint: DoubleArray = DoubleArray(bandsCount) { 0.0 }
+        val fingerprint = DoubleArray(bandsCount) { 0.0 }
         for (fingerprintId in 0..<bandsCount) {
             for (id in bandEdges[fingerprintId]..<bandEdges[fingerprintId + 1]) {
-                fingerprint[fingerprintId] += x0[id]
+                fingerprint[fingerprintId] += magnitude[id]
             }
             fingerprint[fingerprintId] *= bandScale[fingerprintId]
         }
@@ -236,7 +244,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         fingerprints.addLast(fingerprint)
 
         // Calculating fingerprint hash
-        var fingerprintHash: Int = 0
+        var fingerprintHash = 0
         for (id in 0..<frequenciesCount) {
             // TODO: Rename or better, we can simplify code
             val difference =
@@ -252,13 +260,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         fingerprintHashes.addLast(fingerprintHash)
 
+        fingerprintCalculationTime += startTime.elapsedNow()
+        ++fingerprintCalculationCount
+
         // Guessing the song
         // TODO: We can lose mutex
         if (!mutex.isLocked) {
             if (fingerprintHashes.size == fingerprintMatchingSize) {
                 val fingerprintHashesScreenshot: IntArray = fingerprintHashes.toIntArray()
 
-                // TODO: Formalize
+                // Calculating average fingerprint calculation time
+                Log.d(
+                    "DEVEL",
+                    "Average fingerprint calculation time: ${fingerprintCalculationTime / fingerprintCalculationCount}"
+                )
+                fingerprintCalculationTime = ZERO
+                fingerprintCalculationCount = 0
+
                 Log.d("DEVEL", "Guessing track")
 
                 // TODO: GlobalScope is discouraged
@@ -308,6 +326,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         startPull = timeSource.markNow()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun updateText() { // TODO: Rename
         // +------------------------------------+
         // | Updating sensor info on the screen |
@@ -339,7 +358,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | <- referenceData               |
         // +--------------------------------+
 
-        val dataHzList = listOf<Int>(400, 415, 500)
+        val dataHzList = listOf(400, 415, 470, 500)
 
         var closestHz: Int = dataHzList[0]
         for (hz in dataHzList) {
@@ -359,12 +378,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | ...     |
         // +---------+
 
-        if (dataHz == 500) {
-            resource = resources.openRawResource(R.raw.reference_data_500hz)
-        } else if (dataHz == 415) {
-            resource = resources.openRawResource(R.raw.reference_data_415hz)
-        } else if (dataHz == 400) {
-            resource = resources.openRawResource(R.raw.reference_data_400hz)
+        val startTime: TimeMark = timeSource.markNow()
+
+        when (dataHz) {
+            500 -> {
+                resource = resources.openRawResource(R.raw.reference_data_500hz)
+            }
+
+            470 -> {
+                resource = resources.openRawResource(R.raw.reference_data_470hz)
+            }
+
+            415 -> {
+                resource = resources.openRawResource(R.raw.reference_data_415hz)
+            }
+
+            400 -> {
+                resource = resources.openRawResource(R.raw.reference_data_400hz)
+            }
         }
 
         val lines = resource.bufferedReader()
@@ -381,6 +412,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             referenceData[trackName] = data.toIntArray()
         }
 
-        Log.d("DEVEL", "Extracted Data")
+        Log.d("DEVEL", "Extracted Data\nTime spent: ${startTime.elapsedNow()}")
     }
 }
