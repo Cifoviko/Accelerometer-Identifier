@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +-------------------------+
     // | Vars to recognise track |
     // +-------------------------+
-    private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
+    private lateinit var referenceDataHashes: HashMap<String, IntArray>
     private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = IntArray(fingerprintMatchingSize)
     // private var fingerprintMatchingStepCount: Int = 0
@@ -176,7 +176,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         var track = "NONE"
         // TODO: Use sizeOf instead of 32
         var minError: Int = 32 * fingerprintMatchingSize
-        for (trackInfo in referenceData) {
+        for (trackInfo in referenceDataHashes) {
             // TODO: Add time recognition
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
@@ -410,11 +410,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
         // TODO: Drop frames, move to background (?)
-        referenceData = hashMapOf()
+        referenceDataHashes = hashMapOf()
         for (i in lines.indices step 2) {
             val trackName: String = lines[i]
             val data: List<Int> = lines[i + 1].split(' ').map { it.trim().toInt() }
-            referenceData[trackName] = data.toIntArray()
+            referenceDataHashes[trackName] = data.toIntArray()
         }
 
         isLoadedData = true
