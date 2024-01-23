@@ -10,11 +10,15 @@ import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.paramsen.noise.Noise
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import java.io.InputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -53,10 +57,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | Vars to calculate Hz |
     // +----------------------+
     private lateinit var startPull: TimeMark
-    private var isHzInitialized: Boolean = false
     private var measurements: Int = 0
     private var calculatedHz: Double = 0.0
     private var dataHz: Int = 0
+    private var isCalculatedHz: Boolean = false
 
     // +-----------------------------------------+
     // | Pre calculations to create fingerprints |
@@ -76,7 +80,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var fingerprintHashes = IntArray(fingerprintMatchingSize)
     // private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
-    private var isLoadedData: Boolean = false
+    private var isLoadedData: AtomicBoolean = AtomicBoolean(false)
     private val mutex = Mutex() // TODO: bad mutex
 
     // +----------------------+
@@ -131,13 +135,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ============================= Sensor Event Listener ==================================== |
     // +------------------------------------------------------------------------------------------+
+    @OptIn(DelicateCoroutinesApi::class)
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-            if (!isHzInitialized) {
+            if (!isCalculatedHz) {
                 if (measurements == initializeMeasurementsCount) {
                     calculatedHz = initializeMeasurementsCount.seconds / startPull.elapsedNow()
-                    getReferenceData()
-                    isHzInitialized = true
+                    isCalculatedHz = true
+
+                    GlobalScope.launch(Dispatchers.Default) {
+                        getReferenceData(calculatedHz)
+                    }
+
+                    Log.d("DEVEL", "Debug call")
                 } else {
                     ++measurements
                 }
@@ -146,10 +156,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             accelerometerX = event.values[0].toDouble()
             accelerometerY = event.values[1].toDouble()
             accelerometerZ = event.values[2].toDouble()
-        }
 
-        addMeasurement(accelerometerZ) // TODO: not just Z (?)
-        updateText()
+            addMeasurement(accelerometerZ) // TODO: not just Z (?)
+            updateText()
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -167,6 +177,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: Test accuracy
         // TODO: Catch top k matches
         // TODO: We lose power, after a little calculations became slower and slower
+
+        Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
         mutex.lock()
 
@@ -228,7 +240,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 powerSpectrumFloor,
                 (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
             )
-        } // TODO: Rename (I dunno how to call)
+        }
 
         // Band split and energy calculation
         val fingerprint = DoubleArray(bandsCount) { 0.0 }
@@ -268,7 +280,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Guessing the song
         // TODO: We can lose mutex
-        if (isLoadedData && !mutex.isLocked) {
+        if (isLoadedData.get() && !mutex.isLocked) {
             if (fingerprintHashes.size == fingerprintMatchingSize) {
                 val fingerprintHashesScreenshot: IntArray = fingerprintHashes
 
@@ -283,7 +295,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 Log.d("DEVEL", "Guessing track")
 
                 // TODO: GlobalScope is discouraged
-                GlobalScope.launch {
+                // TODO: Still dropping frames
+                GlobalScope.launch(Dispatchers.Default) {
                     guessTrack(fingerprintHashesScreenshot)
                 }
             }
@@ -337,7 +350,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Updating sensor info on the screen |
         // +------------------------------------+
 
-        if (isHzInitialized) {
+        if (isLoadedData.get()) {
             text0.text = "Calculated Hz: %.1fHz / Data Hz: %dHz".format(calculatedHz, dataHz)
         } else {
             text0.text = "Calculating Hz.."
@@ -351,7 +364,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | =============================== Temporary methods ====================================== |
     // +------------------------------------------------------------------------------------------+
     // This methods are for show purpose, in reality we want to get this from server, not local data
-    private fun getReferenceData() {
+    private fun getReferenceData(calculatedHz: Double) {
         // +--------------------------------+
         // | Rounds 'CalculatedHz' to       |
         // | Closest value for whom we      |
@@ -383,6 +396,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | ...     |
         // +---------+
 
+        Log.d("DEVEL", "getReferenceData on thread: ${Thread.currentThread().name}")
+
         val startTime: TimeMark = timeSource.markNow()
 
         when (dataHz) {
@@ -409,11 +424,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val lines = resource.bufferedReader()
             .use { it.readLines() }
-        // TODO: [W] A resource failed to call close.
 
         Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
-        // TODO: Drop frames, move to background (?)
         referenceDataHashes = hashMapOf()
         for (i in lines.indices step 2) {
             val trackName: String = lines[i]
@@ -421,7 +434,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             referenceDataHashes[trackName] = data.toIntArray()
         }
 
-        isLoadedData = true
+        isLoadedData.set(true)
         Log.d("DEVEL", "Extracted Data\nTime spent: ${startTime.elapsedNow()}")
     }
 }
