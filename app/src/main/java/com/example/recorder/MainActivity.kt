@@ -63,6 +63,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val mutex = Mutex()
     private val hammingWindow: DoubleArray =
         DoubleArray(blockInputSize) { 0.54 - 0.46 * cos((2 * PI * it) / (blockInputSize - 1)) }
+    private val bandEdges: IntArray =
+        IntArray(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
+    private val bandScale: DoubleArray =
+        DoubleArray(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
     private lateinit var referenceData: HashMap<String, IntArray> // TODO: Rename
     private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = ArrayDeque<Int>()
@@ -216,11 +220,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         // Band split and energy calculation
-        val bandEdges: IntArray =
-            IntArray(bandsCount + 1) { fingerprintBottomDiscardSize + it * fingerprintMergingSize }
-        val bandScale: DoubleArray =
-            DoubleArray(bandsCount) { 1.0 / (bandEdges[it + 1] - bandEdges[it]) }
-
         val fingerprint: DoubleArray = DoubleArray(bandsCount) { 0.0 }
         for (fingerprintId in 0..<bandsCount) {
             for (id in bandEdges[fingerprintId]..<bandEdges[fingerprintId + 1]) {
