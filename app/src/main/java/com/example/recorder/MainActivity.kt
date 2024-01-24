@@ -85,9 +85,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var referenceDataHashes: HashMap<String, IntArray>
     private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = IntArray(fingerprintMatchingSize)
-    private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
     private var isLoadedData: AtomicBoolean = AtomicBoolean(false)
+    private val guessTrackLock: ReentrantLock = ReentrantLock()
 
     // +----------------------+
     // | Vars for development |
@@ -115,7 +115,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
         private const val trackMatchThreshold: Int = 8400
-        private const val fingerprintMatchingStep: Int = 768
     }
 
     // +------------------------------------------------------------------------------------------+
@@ -207,6 +206,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: Catch top k matches
         // TODO: We lose power, after a little calculations became slower and slower
 
+        guessTrackLock.lock()
+
         Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
         // For DEBUG
@@ -235,6 +236,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         trackViewLock.unlock()
 
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
+
+        guessTrackLock.unlock()
     }
 
     private fun calculateFingerprint() {
@@ -308,30 +311,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ++fingerprintCalculationCount
 
         // Guessing the song
-        // TODO: We can lose mutex
-        if (fingerprintMatchingStepCount == fingerprintMatchingStep) {
-            fingerprintMatchingStepCount = 0
+        if (isLoadedData.get() && !guessTrackLock.isLocked) {
+            val fingerprintHashesScreenshot: IntArray = fingerprintHashes
 
-            if (isLoadedData.get()) {
-                val fingerprintHashesScreenshot: IntArray = fingerprintHashes
+            // Calculating average fingerprint calculation time
+            Log.d(
+                "DEVEL",
+                "Average fingerprint calculation time: ${fingerprintCalculationTime / fingerprintCalculationCount}"
+            )
+            fingerprintCalculationTime = ZERO
+            fingerprintCalculationCount = 0
 
-                // Calculating average fingerprint calculation time
-                Log.d(
-                    "DEVEL",
-                    "Average fingerprint calculation time: ${fingerprintCalculationTime / fingerprintCalculationCount}"
-                )
-                fingerprintCalculationTime = ZERO
-                fingerprintCalculationCount = 0
+            Log.d("DEVEL", "Guessing track")
 
-                Log.d("DEVEL", "Guessing track")
-
-                // TODO: Still dropping frames
-                CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
-                    guessTrack(fingerprintHashesScreenshot)
-                }
+            CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
+                guessTrack(fingerprintHashesScreenshot)
             }
         }
-        ++fingerprintMatchingStepCount
     }
 
     private fun addMeasurement(value: Double) {
