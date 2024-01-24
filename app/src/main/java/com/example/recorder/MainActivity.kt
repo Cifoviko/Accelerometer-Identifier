@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         getReferenceData(calculatedHz)
                     }
 
-                    Log.d("DEVEL", "Debug call")
+                    Log.d("DEVEL", "onSensorChanged Debug call")
                 } else {
                     ++measurements
                 }
@@ -303,6 +303,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Accelerometer to the list |
         // +---------------------------+
 
+        //Log.d("DEVEL", "addMeasurement Debug call")
+
         // Saving measurement
         for (id in 0..<(accelerometerData.size - 1)) {
             accelerometerData[id] = accelerometerData[id + 1]
@@ -418,6 +420,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val lines = resource.bufferedReader()
             .use { it.readLines() }
+        // resource.close()
+        // TODO: Debug with strict mode
+        //       1/3 drops frames
+        //       1/3 [W] A resource failed to call close.
+        //       1/3 gets a lot of garbage collection messages
 
         Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
