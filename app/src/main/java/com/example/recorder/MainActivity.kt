@@ -6,12 +6,14 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.os.StrictMode
+import android.os.StrictMode.ThreadPolicy
+import android.os.StrictMode.VmPolicy
 import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.InputStream
@@ -23,6 +25,7 @@ import kotlin.math.max
 import kotlin.time.*
 import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
+
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
@@ -110,6 +113,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | ================================= Main Activity ======================================== |
     // +------------------------------------------------------------------------------------------+
     override fun onCreate(savedInstanceState: Bundle?) {
+        StrictMode.setThreadPolicy(
+            ThreadPolicy.Builder()
+                .detectDiskReads()
+                .detectDiskWrites()
+                .detectAll()
+                .penaltyLog()
+                .build()
+        )
+        StrictMode.setVmPolicy(
+            VmPolicy.Builder()
+                .detectLeakedSqlLiteObjects()
+                .detectLeakedClosableObjects()
+                .penaltyLog()
+                .penaltyDeath()
+                .build()
+        )
+
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -139,6 +159,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     calculatedHz = initializeMeasurementsCount.seconds / startPull.elapsedNow()
                     isCalculatedHz = true
 
+                    // Should be Dispatchers.IO for server communication
                     CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
                         getReferenceData(calculatedHz)
                     }
@@ -418,13 +439,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        val lines = resource.bufferedReader()
-            .use { it.readLines() }
-        // resource.close()
-        // TODO: Debug with strict mode
-        //       1/3 drops frames
-        //       1/3 [W] A resource failed to call close.
-        //       1/3 gets a lot of garbage collection messages
+        // Reading file line by line in cycle because
+        // File is to big to extract all lines at once
+        // Without freezing app
+        val bufferedReader = resource.bufferedReader()
+        val lines = mutableListOf<String>()
+        var line: String?
+        while (bufferedReader.readLine().also { line = it } != null) {
+            lines.add(line.toString())
+        }
+        bufferedReader.close()
+        resource.close()
+
+        // Fresh install don't drop frames, but repeated launch on some devices do
 
         Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
