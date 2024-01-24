@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
         private const val trackMatchThreshold: Int = 8400
+        private const val topMatchesCount: Int = 5
     }
 
     // +------------------------------------------------------------------------------------------+
@@ -213,29 +214,38 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // For DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
-        var track = "NONE"
-        var minError: Int = trackMatchMaxError
+        val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
+        val errors = IntArray(topMatchesCount) { trackMatchMaxError }
         for (trackInfo in referenceDataHashes) {
             // TODO: Add time recognition
+            var track: String = trackInfo.key
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
-                if (minError > error) {
-                    track = trackInfo.key
-                    minError = error
+
+                for (id in tracks.indices) {
+                    if (errors[id] > error) {
+                        tracks[id] = track.also { track = tracks[id] }
+                        errors[id] = error.also { error = errors[id] }
+                    }
                 }
             }
         }
 
         // Set UI values
         trackViewLock.lock()
-        trackName = track
-        trackError = minError
+        trackName = tracks[0]
+        trackError = errors[0]
         trackViewLock.unlock()
 
-        Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
+        var logString = "Guessed tracks:"
+        for (id in tracks.indices) {
+            logString += "\n${id + 1}) ${tracks[id]} [${errors[id]}]"
+        }
+        logString += "\nTime spent: ${startTime.elapsedNow()}"
+        Log.d("DEVEL", logString)
 
         guessTrackLock.unlock()
     }
