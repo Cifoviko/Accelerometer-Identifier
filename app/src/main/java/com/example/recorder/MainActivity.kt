@@ -1,6 +1,7 @@
 package com.example.recorder
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -18,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -38,12 +40,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private val timeSource = TimeSource.Monotonic
 
-    // TODO: Fix naming
-    private lateinit var text0: TextView
-    private lateinit var text1: TextView
-    private lateinit var text2: TextView
-    private lateinit var text3: TextView
+    // +---------+
+    // | UI vars |
+    // +---------+
+    private lateinit var hzView: TextView
+    private lateinit var xAccelerometerView: TextView
+    private lateinit var yAccelerometerView: TextView
+    private lateinit var zAccelerometerView: TextView
     private lateinit var trackView: TextView
+    private val trackViewLock: ReentrantLock = ReentrantLock()
+    private var trackName: String = "Track"
+    private var trackError: Int = trackMatchMaxError
 
     // +--------------------+
     // | Accelerometer Data |
@@ -78,9 +85,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var referenceDataHashes: HashMap<String, IntArray>
     private var fingerprints = ArrayDeque<DoubleArray>()
     private var fingerprintHashes = IntArray(fingerprintMatchingSize)
-    private var fingerprintMatchingStepCount: Int = 0
     private var blockInputStepCount: Int = 0
     private var isLoadedData: AtomicBoolean = AtomicBoolean(false)
+    private val guessTrackLock: ReentrantLock = ReentrantLock()
 
     // +----------------------+
     // | Vars for development |
@@ -106,38 +113,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val fingerprintBottomDiscardSize: Int = 13
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
-        private const val fingerprintMatchingStep: Int = 768
+        private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
+        private const val trackMatchThreshold: Int = 8400
+        private const val topMatchesCount: Int = 5
     }
 
     // +------------------------------------------------------------------------------------------+
     // | ================================= Main Activity ======================================== |
     // +------------------------------------------------------------------------------------------+
     override fun onCreate(savedInstanceState: Bundle?) {
-        StrictMode.setThreadPolicy(
-            ThreadPolicy.Builder()
-                .detectDiskReads()
-                .detectDiskWrites()
-                .detectAll()
-                .penaltyLog()
-                .build()
-        )
-        StrictMode.setVmPolicy(
-            VmPolicy.Builder()
-                .detectLeakedSqlLiteObjects()
-                .detectLeakedClosableObjects()
-                .penaltyLog()
-                .penaltyDeath()
-                .build()
-        )
-
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        text0 = findViewById(R.id.text0)
-        text1 = findViewById(R.id.text1)
-        text2 = findViewById(R.id.text2)
-        text3 = findViewById(R.id.text3)
-        trackView = findViewById(R.id.track)
+        hzView = findViewById(R.id.hzView)
+        xAccelerometerView = findViewById(R.id.xAccelerometerView)
+        yAccelerometerView = findViewById(R.id.yAccelerometerView)
+        zAccelerometerView = findViewById(R.id.zAccelerometerView)
+        trackView = findViewById(R.id.trackView)
 
         setupSensors()
 
@@ -195,30 +187,47 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // TODO: Catch top k matches
         // TODO: We lose power, after a little calculations became slower and slower
 
+        guessTrackLock.lock()
+
         Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
         // For DEBUG
         val startTime: TimeMark = timeSource.markNow()
 
-        var track = "NONE"
-        // TODO: Use sizeOf instead of 32
-        var minError: Int = 32 * fingerprintMatchingSize
+        val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
+        val errors = IntArray(topMatchesCount) { trackMatchMaxError }
         for (trackInfo in referenceDataHashes) {
             // TODO: Add time recognition
+            var track: String = trackInfo.key
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
-                if (minError > error) {
-                    track = trackInfo.key
-                    minError = error
+
+                for (id in tracks.indices) {
+                    if (errors[id] > error) {
+                        tracks[id] = track.also { track = tracks[id] }
+                        errors[id] = error.also { error = errors[id] }
+                    }
                 }
             }
         }
 
-        // TODO: print results on screen
-        Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
+        // Set UI values
+        trackViewLock.lock()
+        trackName = tracks[0]
+        trackError = errors[0]
+        trackViewLock.unlock()
+
+        var logString = "Guessed tracks:"
+        for (id in tracks.indices) {
+            logString += "\n${id + 1}) ${tracks[id]} [${errors[id]}]"
+        }
+        logString += "\nTime spent: ${startTime.elapsedNow()}"
+        Log.d("DEVEL", logString)
+
+        guessTrackLock.unlock()
     }
 
     private fun calculateFingerprint() {
@@ -292,30 +301,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         ++fingerprintCalculationCount
 
         // Guessing the song
-        // TODO: We can lose mutex
-        if (fingerprintMatchingStepCount == fingerprintMatchingStep) {
-            fingerprintMatchingStepCount = 0
+        if (isLoadedData.get() && !guessTrackLock.isLocked) {
+            val fingerprintHashesScreenshot: IntArray = fingerprintHashes
 
-            if (isLoadedData.get()) {
-                val fingerprintHashesScreenshot: IntArray = fingerprintHashes
+            // Calculating average fingerprint calculation time
+            Log.d(
+                "DEVEL",
+                "Average fingerprint calculation time: ${fingerprintCalculationTime / fingerprintCalculationCount}"
+            )
+            fingerprintCalculationTime = ZERO
+            fingerprintCalculationCount = 0
 
-                // Calculating average fingerprint calculation time
-                Log.d(
-                    "DEVEL",
-                    "Average fingerprint calculation time: ${fingerprintCalculationTime / fingerprintCalculationCount}"
-                )
-                fingerprintCalculationTime = ZERO
-                fingerprintCalculationCount = 0
+            Log.d("DEVEL", "Guessing track")
 
-                Log.d("DEVEL", "Guessing track")
-
-                // TODO: Still dropping frames
-                CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
-                    guessTrack(fingerprintHashesScreenshot)
-                }
+            CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
+                guessTrack(fingerprintHashesScreenshot)
             }
         }
-        ++fingerprintMatchingStepCount
     }
 
     private fun addMeasurement(value: Double) {
@@ -367,14 +369,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Updating sensor info on the screen |
         // +------------------------------------+
 
-        if (isLoadedData.get()) {
-            text0.text = "Calculated Hz: %.1fHz / Data Hz: %dHz".format(calculatedHz, dataHz)
+        trackViewLock.lock()
+        if (trackError < trackMatchThreshold) {
+            trackView.setTextColor(Color.GREEN)
         } else {
-            text0.text = "Calculating Hz.."
+            trackView.setTextColor(Color.RED)
         }
-        text1.text = "x = %.3f".format(accelerometerX / SensorManager.GRAVITY_EARTH)
-        text2.text = "y = %.3f".format(accelerometerY / SensorManager.GRAVITY_EARTH)
-        text3.text = "z = %.3f".format(accelerometerZ / SensorManager.GRAVITY_EARTH)
+
+        trackView.text = "$trackName [$trackError]"
+        trackViewLock.unlock()
+
+        if (isLoadedData.get()) {
+            hzView.text = "Calculated Hz: %.1fHz / Data Hz: %dHz".format(calculatedHz, dataHz)
+        } else {
+            hzView.text = "Calculating Hz.."
+        }
+
+        xAccelerometerView.text = "x = %.3f".format(accelerometerX / SensorManager.GRAVITY_EARTH)
+        yAccelerometerView.text = "y = %.3f".format(accelerometerY / SensorManager.GRAVITY_EARTH)
+        zAccelerometerView.text = "z = %.3f".format(accelerometerZ / SensorManager.GRAVITY_EARTH)
     }
 
     // +------------------------------------------------------------------------------------------+

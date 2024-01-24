@@ -7,52 +7,53 @@
     tools:context=".MainActivity">
 
     <TextView
-        android:id="@+id/text0"
+        android:id="@+id/hzView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="25dp"
-        android:text="TextView"
-        app:layout_constraintBottom_toTopOf="@+id/text1"
+        android:text="hz"
+        app:layout_constraintBottom_toTopOf="@+id/xAccelerometerView"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
     <TextView
-        android:id="@+id/text1"
+        android:id="@+id/xAccelerometerView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello World!"
+        android:text="x value"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
-        android:id="@+id/text2"
+        android:id="@+id/yAccelerometerView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="25dp"
-        android:text="TextView"
+        android:text="y value"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.501"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/text1" />
+        app:layout_constraintTop_toBottomOf="@+id/xAccelerometerView" />
 
     <TextView
-        android:id="@+id/text3"
+        android:id="@+id/zAccelerometerView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="25dp"
-        android:text="TextView"
+        android:text="z value"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/text2" />
+        app:layout_constraintTop_toBottomOf="@+id/yAccelerometerView" />
 
     <TextView
-        android:id="@+id/track"
+        android:id="@+id/trackView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Track Match"
-        app:layout_constraintBottom_toTopOf="@+id/text0"
+        app:layout_constraintBottom_toTopOf="@+id/hzView"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
