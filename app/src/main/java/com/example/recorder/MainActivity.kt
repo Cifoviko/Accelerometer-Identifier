@@ -13,10 +13,7 @@ import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
@@ -135,7 +132,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ============================= Sensor Event Listener ==================================== |
     // +------------------------------------------------------------------------------------------+
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
             if (!isCalculatedHz) {
@@ -143,7 +139,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     calculatedHz = initializeMeasurementsCount.seconds / startPull.elapsedNow()
                     isCalculatedHz = true
 
-                    GlobalScope.launch(Dispatchers.Default) {
+                    CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
                         getReferenceData(calculatedHz)
                     }
 
@@ -169,7 +165,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-    private suspend fun guessTrack(fingerprintHashesScreenshot: IntArray) {
+    private fun guessTrack(fingerprintHashesScreenshot: IntArray) {
         // +-------------------------------+
         // | Finds closest match in tracks |
         // +-------------------------------+
@@ -204,7 +200,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun calculateFingerprint() {
         // +----------------------------------+
         // | Calculates fingerprint and it's  |
@@ -293,9 +288,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 Log.d("DEVEL", "Guessing track")
 
-                // TODO: GlobalScope is discouraged
                 // TODO: Still dropping frames
-                GlobalScope.launch(Dispatchers.Default) {
+                CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
                     guessTrack(fingerprintHashesScreenshot)
                 }
             }
