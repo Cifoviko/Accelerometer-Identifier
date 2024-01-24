@@ -122,6 +122,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | ================================= Main Activity ======================================== |
     // +------------------------------------------------------------------------------------------+
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        // [Strict Mode] Section Start
+        StrictMode.setThreadPolicy(
+            ThreadPolicy.Builder()
+                .detectDiskReads()
+                .detectDiskWrites()
+                .detectAll()
+                .penaltyLog()
+                .build()
+        )
+        StrictMode.setVmPolicy(
+            VmPolicy.Builder()
+                .detectLeakedSqlLiteObjects()
+                .detectLeakedClosableObjects()
+                .penaltyLog()
+                .penaltyDeath()
+                .build()
+        )
+        // [Strict Mode] Section End
+
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
