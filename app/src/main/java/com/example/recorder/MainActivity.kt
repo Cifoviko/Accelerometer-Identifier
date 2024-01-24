@@ -1,6 +1,7 @@
 package com.example.recorder
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -38,12 +39,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private val timeSource = TimeSource.Monotonic
 
-    // TODO: Fix naming
-    private lateinit var text0: TextView
-    private lateinit var text1: TextView
-    private lateinit var text2: TextView
-    private lateinit var text3: TextView
+    // +---------+
+    // | UI vars |
+    // +---------+
+    private lateinit var hzView: TextView
+    private lateinit var xAccelerometerView: TextView
+    private lateinit var yAccelerometerView: TextView
+    private lateinit var zAccelerometerView: TextView
     private lateinit var trackView: TextView
+    private var trackName: String = "Track"
+    private var trackError: Int = trackMatchMaxError
 
     // +--------------------+
     // | Accelerometer Data |
@@ -106,6 +111,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val fingerprintBottomDiscardSize: Int = 13
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
+        private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
+        private const val trackMatchTreshold: Int = 8400
         private const val fingerprintMatchingStep: Int = 768
     }
 
@@ -113,6 +120,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | ================================= Main Activity ======================================== |
     // +------------------------------------------------------------------------------------------+
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        // [Strict Mode] Section Start
         StrictMode.setThreadPolicy(
             ThreadPolicy.Builder()
                 .detectDiskReads()
@@ -129,15 +138,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 .penaltyDeath()
                 .build()
         )
+        // [Strict Mode] Section End
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        text0 = findViewById(R.id.text0)
-        text1 = findViewById(R.id.text1)
-        text2 = findViewById(R.id.text2)
-        text3 = findViewById(R.id.text3)
-        trackView = findViewById(R.id.track)
+        hzView = findViewById(R.id.hzView)
+        xAccelerometerView = findViewById(R.id.xAccelerometerView)
+        yAccelerometerView = findViewById(R.id.yAccelerometerView)
+        zAccelerometerView = findViewById(R.id.zAccelerometerView)
+        trackView = findViewById(R.id.trackView)
 
         setupSensors()
 
@@ -201,8 +211,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val startTime: TimeMark = timeSource.markNow()
 
         var track = "NONE"
-        // TODO: Use sizeOf instead of 32
-        var minError: Int = 32 * fingerprintMatchingSize
+        var minError: Int = trackMatchMaxError
         for (trackInfo in referenceDataHashes) {
             // TODO: Add time recognition
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
@@ -367,14 +376,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Updating sensor info on the screen |
         // +------------------------------------+
 
-        if (isLoadedData.get()) {
-            text0.text = "Calculated Hz: %.1fHz / Data Hz: %dHz".format(calculatedHz, dataHz)
+        if (trackError < trackMatchTreshold) {
+            trackView.setTextColor(Color.GREEN)
         } else {
-            text0.text = "Calculating Hz.."
+            trackView.setTextColor(Color.RED)
         }
-        text1.text = "x = %.3f".format(accelerometerX / SensorManager.GRAVITY_EARTH)
-        text2.text = "y = %.3f".format(accelerometerY / SensorManager.GRAVITY_EARTH)
-        text3.text = "z = %.3f".format(accelerometerZ / SensorManager.GRAVITY_EARTH)
+
+        trackView.text = "$trackName [$trackError]"
+
+        if (isLoadedData.get()) {
+            hzView.text = "Calculated Hz: %.1fHz / Data Hz: %dHz".format(calculatedHz, dataHz)
+        } else {
+            hzView.text = "Calculating Hz.."
+        }
+
+        xAccelerometerView.text = "x = %.3f".format(accelerometerX / SensorManager.GRAVITY_EARTH)
+        yAccelerometerView.text = "y = %.3f".format(accelerometerY / SensorManager.GRAVITY_EARTH)
+        zAccelerometerView.text = "z = %.3f".format(accelerometerZ / SensorManager.GRAVITY_EARTH)
     }
 
     // +------------------------------------------------------------------------------------------+
