@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var yAccelerometerView: TextView
     private lateinit var zAccelerometerView: TextView
     private lateinit var trackView: TextView
+    private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
 
@@ -112,7 +114,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
-        private const val trackMatchTreshold: Int = 8400
+        private const val trackMatchThreshold: Int = 8400
         private const val fingerprintMatchingStep: Int = 768
     }
 
@@ -226,7 +228,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        // TODO: print results on screen
+        // Set UI values
+        trackViewLock.lock()
+        trackName = track
+        trackError = minError
+        trackViewLock.unlock()
+
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
     }
 
@@ -376,13 +383,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Updating sensor info on the screen |
         // +------------------------------------+
 
-        if (trackError < trackMatchTreshold) {
+        trackViewLock.lock()
+        if (trackError < trackMatchThreshold) {
             trackView.setTextColor(Color.GREEN)
         } else {
             trackView.setTextColor(Color.RED)
         }
 
         trackView.text = "$trackName [$trackError]"
+        trackViewLock.unlock()
 
         if (isLoadedData.get()) {
             hzView.text = "Calculated Hz: %.1fHz / Data Hz: %dHz".format(calculatedHz, dataHz)
