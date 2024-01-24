@@ -13,10 +13,7 @@ import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
@@ -135,7 +132,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ============================= Sensor Event Listener ==================================== |
     // +------------------------------------------------------------------------------------------+
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
             if (!isCalculatedHz) {
@@ -143,11 +139,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     calculatedHz = initializeMeasurementsCount.seconds / startPull.elapsedNow()
                     isCalculatedHz = true
 
-                    GlobalScope.launch(Dispatchers.Default) {
+                    CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
                         getReferenceData(calculatedHz)
                     }
 
-                    Log.d("DEVEL", "Debug call")
+                    Log.d("DEVEL", "onSensorChanged Debug call")
                 } else {
                     ++measurements
                 }
@@ -169,7 +165,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-    private suspend fun guessTrack(fingerprintHashesScreenshot: IntArray) {
+    private fun guessTrack(fingerprintHashesScreenshot: IntArray) {
         // +-------------------------------+
         // | Finds closest match in tracks |
         // +-------------------------------+
@@ -204,7 +200,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Log.d("DEVEL", "Guessed track: $track [$minError]\nTime spent: ${startTime.elapsedNow()}")
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun calculateFingerprint() {
         // +----------------------------------+
         // | Calculates fingerprint and it's  |
@@ -293,9 +288,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 Log.d("DEVEL", "Guessing track")
 
-                // TODO: GlobalScope is discouraged
                 // TODO: Still dropping frames
-                GlobalScope.launch(Dispatchers.Default) {
+                CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
                     guessTrack(fingerprintHashesScreenshot)
                 }
             }
@@ -308,6 +302,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | Adds new measurement from |
         // | Accelerometer to the list |
         // +---------------------------+
+
+        //Log.d("DEVEL", "addMeasurement Debug call")
 
         // Saving measurement
         for (id in 0..<(accelerometerData.size - 1)) {
@@ -424,6 +420,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val lines = resource.bufferedReader()
             .use { it.readLines() }
+        // resource.close()
+        // TODO: Debug with strict mode
+        //       1/3 drops frames
+        //       1/3 [W] A resource failed to call close.
+        //       1/3 gets a lot of garbage collection messages
 
         Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
