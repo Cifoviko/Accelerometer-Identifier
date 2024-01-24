@@ -159,6 +159,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     calculatedHz = initializeMeasurementsCount.seconds / startPull.elapsedNow()
                     isCalculatedHz = true
 
+                    // Should be Dispatchers.IO for server communication
                     CoroutineScope(Dispatchers.Default).launch(Dispatchers.Default) {
                         getReferenceData(calculatedHz)
                     }
@@ -438,14 +439,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
+        // Reading file line by line in cycle because
+        // File is to big to extract all lines at once
+        // Without freezing app
         val bufferedReader = resource.bufferedReader()
-        val lines = bufferedReader.readLines()
+        val lines = mutableListOf<String>()
+        var line: String?
+        while (bufferedReader.readLine().also { line = it } != null) {
+            lines.add(line.toString())
+        }
         bufferedReader.close()
         resource.close()
-        // TODO: Debug with strict mode
-        //       1/3 drops frames
-        //       1/3 [W] A resource failed to call close.
-        //       1/3 gets a lot of garbage collection messages
+
+        // Fresh install don't drop frames, but repeated launch on some devices do
 
         Log.d("DEVEL", "Read file, tracks: " + lines.size)
 
