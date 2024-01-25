@@ -216,21 +216,34 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
+        val positions = IntArray(topMatchesCount) { 0 }
         for (trackInfo in referenceDataHashes) {
             // TODO: Add time recognition
+            var minError: Int = trackMatchMaxError
+            var minPosition: Int = 0
             var track: String = trackInfo.key
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
-
-                for (id in tracks.indices) {
-                    if (errors[id] > error) {
-                        tracks[id] = track.also { track = tracks[id] }
-                        errors[id] = error.also { error = errors[id] }
-                    }
+                if (error < minError) {
+                    minError = error
+                    minPosition = segmentStart
                 }
+            }
+            if (minError < errors[errors.lastIndex]) {
+                tracks[tracks.lastIndex] = track
+                errors[errors.lastIndex] = minError
+                positions[positions.lastIndex] = minPosition
+                // Re-sorting top track array
+                val sortedIdx = errors.indices.sortedBy { errors[it] }
+                val sortedTracks = sortedIdx.map { tracks[it] }.toTypedArray()
+                val sortedPositions = sortedIdx.map { positions[it] }.toIntArray()
+                val sortedErrors = sortedIdx.map { errors[it] }.toIntArray()
+                System.arraycopy(sortedTracks, 0, tracks, 0, topMatchesCount)
+                System.arraycopy(sortedErrors, 0, errors, 0, topMatchesCount)
+                System.arraycopy(sortedPositions, 0, positions, 0, topMatchesCount)
             }
         }
 
@@ -242,7 +255,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         var logString = "Guessed tracks:"
         for (id in tracks.indices) {
-            logString += "\n${id + 1}) ${tracks[id]} [${errors[id]}]"
+            logString += "\n${id + 1}) ${tracks[id]} [${errors[id]}/${positions[id]}] "
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
