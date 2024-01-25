@@ -229,7 +229,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
-        val positions = IntArray(topMatchesCount) { 0 }
         for (trackInfo in referenceDataHashes) {
             var minTrack: String = trackInfo.key
             var minError: Int = trackMatchMaxError
@@ -239,9 +238,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 for (id in 0..<fingerprintMatchingSize) {
                     error += (trackInfo.value[segmentStart + id] xor fingerprintHashesScreenshot[id]).countOneBits()
                 }
-                if (error < minError) {
-                    minError = error
-                    minPosition = segmentStart
+
+                for (id in tracks.indices) {
+                    if (errors[id] > error) {
+                        tracks[id] = track.also { track = tracks[id] }
+                        errors[id] = error.also { error = errors[id] }
+                    }
                 }
             }
             for (id in tracks.indices) {
