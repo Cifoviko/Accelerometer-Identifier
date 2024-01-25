@@ -7,9 +7,6 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
-import android.os.StrictMode
-import android.os.StrictMode.ThreadPolicy
-import android.os.StrictMode.VmPolicy
 import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -196,7 +193,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             accelerometerZ = event.values[2].toDouble()
 
             addMeasurement(accelerometerZ) // TODO: not just Z (?)
-            updateText()
+            updateUI()
         }
     }
 
@@ -217,7 +214,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // +-------------------------------+
 
         // TODO: Test accuracy
-        // TODO: Catch top k matches
         // TODO: We lose power, after a little calculations became slower and slower
 
         guessTrackLock.lock()
@@ -326,7 +322,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Calculating fingerprint hash
         var fingerprintHash = 0
         for (id in 0..<frequenciesCount) {
-            // TODO: Rename or better, we can simplify code
             val difference =
                 (fingerprint[id] - fingerprints.first()[id]) - (fingerprint[id + 1] - fingerprints.first()[id + 1])
             if (difference > 0) {
@@ -408,7 +403,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     @SuppressLint("SetTextI18n")
-    private fun updateText() { // TODO: Rename
+    private fun updateUI() {
         // +------------------------------------+
         // | Updating sensor info on the screen |
         // +------------------------------------+
