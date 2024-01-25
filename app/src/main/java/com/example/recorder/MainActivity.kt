@@ -47,10 +47,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var xAccelerometerView: TextView
     private lateinit var yAccelerometerView: TextView
     private lateinit var zAccelerometerView: TextView
-    private lateinit var trackView: TextView
+    private lateinit var trackNameView: TextView
+    private lateinit var trackInfoView: TextView
     private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
+    private var trackMatchTimeStart: Int = 0
+    private var trackMatchTimeEnd: Int = 0
+    private lateinit var trackMatchTimestamp: TimeMark
 
     // +--------------------+
     // | Accelerometer Data |
@@ -145,11 +149,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        trackMatchTimestamp = timeSource.markNow()
+
         hzView = findViewById(R.id.hzView)
         xAccelerometerView = findViewById(R.id.xAccelerometerView)
         yAccelerometerView = findViewById(R.id.yAccelerometerView)
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
-        trackView = findViewById(R.id.trackView)
+        trackNameView = findViewById(R.id.trackNameView)
+        trackInfoView = findViewById(R.id.trackInfoView)
 
         setupSensors()
 
@@ -222,7 +229,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
         val positions = IntArray(topMatchesCount) { 0 }
         for (trackInfo in referenceDataHashes) {
-            // TODO: Add time recognition
             var minTrack: String = trackInfo.key
             var minError: Int = trackMatchMaxError
             var minPosition = 0
@@ -249,11 +255,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         trackViewLock.lock()
         trackName = tracks[0]
         trackError = errors[0]
+        trackMatchTimeStart = dataPointToSeconds(positions[0])
+        trackMatchTimeEnd = dataPointToSeconds(positions[0] + fingerprintMatchingSize)
+        trackMatchTimestamp = startTime
         trackViewLock.unlock()
 
         var logString = "Guessed tracks:"
         for (id in tracks.indices) {
-            logString += "\n${id + 1}) [${errors[id]}] ${tracks[id]} (at ${dataPointToSeconds(positions[id])}s) "
+            logString += "\n${id + 1}) [${errors[id]}] ${tracks[id]} " +
+                    "(at ${dataPointToSeconds(positions[id])}s - " +
+                    "${dataPointToSeconds(positions[id] + fingerprintMatchingSize)}s)"
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
@@ -402,12 +413,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         trackViewLock.lock()
         if (trackError < trackMatchThreshold) {
-            trackView.setTextColor(Color.GREEN)
+            trackNameView.setTextColor(Color.GREEN)
+            trackInfoView.setTextColor(Color.GREEN)
         } else {
-            trackView.setTextColor(Color.RED)
+            trackNameView.setTextColor(Color.RED)
+            trackInfoView.setTextColor(Color.RED)
         }
 
-        trackView.text = "$trackName [$trackError]"
+        trackNameView.text = trackName
+        trackInfoView.text = "error: %d / at %ds - %ds / %ds ago".format(
+            trackError,
+            trackMatchTimeStart,
+            trackMatchTimeEnd,
+            trackMatchTimestamp.elapsedNow().inWholeSeconds
+        )
         trackViewLock.unlock()
 
         if (isLoadedData.get()) {
