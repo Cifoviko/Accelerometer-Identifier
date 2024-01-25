@@ -114,7 +114,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
-        private const val trackMatchThreshold: Int = 8400
+        private const val trackMatchThreshold: Int = 8200
         private const val topMatchesCount: Int = 5
     }
 
@@ -291,7 +291,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val magnitude = DoubleArray(realFftSize) {
             max(
                 powerSpectrumFloor,
-                (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
+                fft[it * 2].toDouble() * fft[it * 2].toDouble() + fft[it * 2 + 1].toDouble() * fft[it * 2 + 1].toDouble()
             )
         }
 
