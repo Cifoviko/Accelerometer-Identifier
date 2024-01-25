@@ -198,6 +198,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
+
+    private fun dataPointToSeconds(point: Int): Int {
+        return (point * blockInputStep / dataHz)
+    }
     private fun guessTrack(fingerprintHashesScreenshot: IntArray) {
         // +-------------------------------+
         // | Finds closest match in tracks |
@@ -219,9 +223,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val positions = IntArray(topMatchesCount) { 0 }
         for (trackInfo in referenceDataHashes) {
             // TODO: Add time recognition
+            var minTrack: String = trackInfo.key
             var minError: Int = trackMatchMaxError
-            var minPosition: Int = 0
-            var track: String = trackInfo.key
+            var minPosition = 0
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
@@ -232,18 +236,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     minPosition = segmentStart
                 }
             }
-            if (minError < errors[errors.lastIndex]) {
-                tracks[tracks.lastIndex] = track
-                errors[errors.lastIndex] = minError
-                positions[positions.lastIndex] = minPosition
-                // Re-sorting top track array
-                val sortedIdx = errors.indices.sortedBy { errors[it] }
-                val sortedTracks = sortedIdx.map { tracks[it] }.toTypedArray()
-                val sortedPositions = sortedIdx.map { positions[it] }.toIntArray()
-                val sortedErrors = sortedIdx.map { errors[it] }.toIntArray()
-                System.arraycopy(sortedTracks, 0, tracks, 0, topMatchesCount)
-                System.arraycopy(sortedErrors, 0, errors, 0, topMatchesCount)
-                System.arraycopy(sortedPositions, 0, positions, 0, topMatchesCount)
+            for (id in tracks.indices) {
+                if (errors[id] > minError) {
+                    tracks[id] = minTrack.also { minTrack = tracks[id] }
+                    errors[id] = minError.also { minError = errors[id] }
+                    positions[id] = minPosition.also { minPosition = positions[id] }
+                }
             }
         }
 
@@ -255,7 +253,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         var logString = "Guessed tracks:"
         for (id in tracks.indices) {
-            logString += "\n${id + 1}) ${tracks[id]} [${errors[id]}/${positions[id]}] "
+            logString += "\n${id + 1}) [${errors[id]}] ${tracks[id]} (at ${dataPointToSeconds(positions[id])}s) "
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
