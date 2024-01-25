@@ -128,6 +128,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onCreate(savedInstanceState: Bundle?) {
 
         // [Strict Mode] Section Start
+        /*
         StrictMode.setThreadPolicy(
             ThreadPolicy.Builder()
                 .detectDiskReads()
@@ -144,6 +145,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 .penaltyDeath()
                 .build()
         )
+        */
         // [Strict Mode] Section End
 
         super.onCreate(savedInstanceState)
