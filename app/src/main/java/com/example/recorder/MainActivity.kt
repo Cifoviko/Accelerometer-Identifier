@@ -47,10 +47,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var xAccelerometerView: TextView
     private lateinit var yAccelerometerView: TextView
     private lateinit var zAccelerometerView: TextView
-    private lateinit var trackView: TextView
+    private lateinit var trackNameView: TextView
+    private lateinit var trackInfoView: TextView
     private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
+    private var trackMatchTimeStart: Int = 0
+    private var trackMatchTimeEnd: Int = 0
+    private lateinit var trackMatchTimestamp: TimeMark
 
     // +--------------------+
     // | Accelerometer Data |
@@ -114,7 +118,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
-        private const val trackMatchThreshold: Int = 8400
+        private const val trackMatchThreshold: Int = 8200
         private const val topMatchesCount: Int = 5
     }
 
@@ -122,14 +126,39 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // | ================================= Main Activity ======================================== |
     // +------------------------------------------------------------------------------------------+
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        // [Strict Mode] Section Start
+        /*
+        StrictMode.setThreadPolicy(
+            ThreadPolicy.Builder()
+                .detectDiskReads()
+                .detectDiskWrites()
+                .detectAll()
+                .penaltyLog()
+                .build()
+        )
+        StrictMode.setVmPolicy(
+            VmPolicy.Builder()
+                .detectLeakedSqlLiteObjects()
+                .detectLeakedClosableObjects()
+                .penaltyLog()
+                .penaltyDeath()
+                .build()
+        )
+        */
+        // [Strict Mode] Section End
+
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        trackMatchTimestamp = timeSource.markNow()
 
         hzView = findViewById(R.id.hzView)
         xAccelerometerView = findViewById(R.id.xAccelerometerView)
         yAccelerometerView = findViewById(R.id.yAccelerometerView)
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
-        trackView = findViewById(R.id.trackView)
+        trackNameView = findViewById(R.id.trackNameView)
+        trackInfoView = findViewById(R.id.trackInfoView)
 
         setupSensors()
 
@@ -178,6 +207,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
+
+    private fun dataPointToSeconds(point: Int): Int {
+        return (point * blockInputStep / dataHz)
+    }
     private fun guessTrack(fingerprintHashesScreenshot: IntArray) {
         // +-------------------------------+
         // | Finds closest match in tracks |
@@ -197,8 +230,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
         for (trackInfo in referenceDataHashes) {
-            // TODO: Add time recognition
-            var track: String = trackInfo.key
+            var minTrack: String = trackInfo.key
+            var minError: Int = trackMatchMaxError
+            var minPosition = 0
             for (segmentStart in 0..trackInfo.value.size - fingerprintMatchingSize) {
                 var error = 0
                 for (id in 0..<fingerprintMatchingSize) {
@@ -212,17 +246,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     }
                 }
             }
+            for (id in tracks.indices) {
+                if (errors[id] > minError) {
+                    tracks[id] = minTrack.also { minTrack = tracks[id] }
+                    errors[id] = minError.also { minError = errors[id] }
+                    positions[id] = minPosition.also { minPosition = positions[id] }
+                }
+            }
         }
 
         // Set UI values
         trackViewLock.lock()
         trackName = tracks[0]
         trackError = errors[0]
+        trackMatchTimeStart = dataPointToSeconds(positions[0])
+        trackMatchTimeEnd = dataPointToSeconds(positions[0] + fingerprintMatchingSize)
+        trackMatchTimestamp = startTime
         trackViewLock.unlock()
 
         var logString = "Guessed tracks:"
         for (id in tracks.indices) {
-            logString += "\n${id + 1}) ${tracks[id]} [${errors[id]}]"
+            logString += "\n${id + 1}) [${errors[id]}] ${tracks[id]} " +
+                    "(at ${dataPointToSeconds(positions[id])}s - " +
+                    "${dataPointToSeconds(positions[id] + fingerprintMatchingSize)}s)"
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
@@ -260,7 +306,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val magnitude = DoubleArray(realFftSize) {
             max(
                 powerSpectrumFloor,
-                (fft[it * 2].toDouble()) * (fft[it * 2].toDouble())
+                fft[it * 2].toDouble() * fft[it * 2].toDouble() + fft[it * 2 + 1].toDouble() * fft[it * 2 + 1].toDouble()
             )
         }
 
@@ -371,12 +417,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         trackViewLock.lock()
         if (trackError < trackMatchThreshold) {
-            trackView.setTextColor(Color.GREEN)
+            trackNameView.setTextColor(Color.GREEN)
+            trackInfoView.setTextColor(Color.GREEN)
         } else {
-            trackView.setTextColor(Color.RED)
+            trackNameView.setTextColor(Color.RED)
+            trackInfoView.setTextColor(Color.RED)
         }
 
-        trackView.text = "$trackName [$trackError]"
+        trackNameView.text = trackName
+        trackInfoView.text = "error: %d / at %ds - %ds / %ds ago".format(
+            trackError,
+            trackMatchTimeStart,
+            trackMatchTimeEnd,
+            trackMatchTimestamp.elapsedNow().inWholeSeconds
+        )
         trackViewLock.unlock()
 
         if (isLoadedData.get()) {

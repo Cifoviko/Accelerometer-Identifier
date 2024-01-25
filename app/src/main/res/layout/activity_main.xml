@@ -49,14 +49,24 @@
         app:layout_constraintTop_toBottomOf="@+id/yAccelerometerView" />
 
     <TextView
-        android:id="@+id/trackView"
+        android:id="@+id/trackNameView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Track Match"
+        android:textSize="20sp"
         app:layout_constraintBottom_toTopOf="@+id/hzView"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:textSize="20sp" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/trackInfoView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="25dp"
+        android:text="Additional info"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/trackNameView" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
