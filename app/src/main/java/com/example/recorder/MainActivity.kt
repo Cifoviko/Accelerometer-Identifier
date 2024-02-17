@@ -1,6 +1,7 @@
 package com.example.recorder
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -161,6 +162,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         trackNameView = findViewById(R.id.trackNameView)
         trackInfoView = findViewById(R.id.trackInfoView)
 
+        // Create empty log file
+        applicationContext.openFileOutput("log.txt", Context.MODE_PRIVATE).use {
+            it.write("".toByteArray())
+        }
+
         setupSensors()
 
         // TODO: Calculate reference Hz (?)
@@ -270,6 +276,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
+
+        // Save to log file
+        applicationContext.openFileOutput("log.txt", Context.MODE_APPEND).use {
+            it.write("${errors[0]} ${errors[0]} $startTime".toByteArray())
+        }
 
         guessTrackLock.unlock()
     }
