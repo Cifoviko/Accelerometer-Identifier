@@ -1,22 +1,28 @@
 package com.example.recorder
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.Uri
 import android.os.Bundle
-import android.os.StrictMode
-import android.os.StrictMode.ThreadPolicy
-import android.os.StrictMode.VmPolicy
+import android.os.Environment
 import android.util.Log
+import android.view.WindowManager
+import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import com.google.android.material.snackbar.Snackbar
 import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -49,6 +55,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var zAccelerometerView: TextView
     private lateinit var trackNameView: TextView
     private lateinit var trackInfoView: TextView
+    private lateinit var startLogButton: Button
     private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
@@ -98,6 +105,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +----------------------+
     private var fingerprintCalculationCount: Int = 0
     private var fingerprintCalculationTime: Duration = ZERO
+    private val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "acc_results.txt")
 
     companion object {
         // +---------------------------+
@@ -118,7 +126,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
-        private const val trackMatchThreshold: Int = 8200
+        private const val trackMatchThreshold: Int = 8300
         private const val topMatchesCount: Int = 5
     }
 
@@ -151,6 +159,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Keep screen on for long tests
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         trackMatchTimestamp = timeSource.markNow()
 
         hzView = findViewById(R.id.hzView)
@@ -159,6 +170,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
         trackNameView = findViewById(R.id.trackNameView)
         trackInfoView = findViewById(R.id.trackInfoView)
+        startLogButton = findViewById(R.id.startLogButton)
+
+        // Create empty log file
+        file.writeText("${System.currentTimeMillis() / 1000}\n")
+
+        startLogButton.setOnClickListener { view ->
+            // Empty log file
+            val startTime = System.currentTimeMillis() / 1000
+            file.writeText("$startTime\n")
+            Snackbar.make(
+                view,
+                "Started log at $startTime",
+                Snackbar.LENGTH_LONG
+            ).setAction("Action", null).show()
+        }
 
         setupSensors()
 
@@ -196,7 +222,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             accelerometerZ = event.values[2].toDouble()
 
             addMeasurement(accelerometerZ) // TODO: not just Z (?)
-            updateText()
+            updateUI()
         }
     }
 
@@ -207,7 +233,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-
     private fun dataPointToSeconds(point: Int): Int {
         return (point * blockInputStep / dataHz)
     }
@@ -217,15 +242,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // +-------------------------------+
 
         // TODO: Test accuracy
-        // TODO: Catch top k matches
         // TODO: We lose power, after a little calculations became slower and slower
 
         guessTrackLock.lock()
 
         Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
-        // For DEBUG
+        // For statistic
         val startTime: TimeMark = timeSource.markNow()
+        val matchingTime = System.currentTimeMillis() / 1000
 
         val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
@@ -270,6 +295,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
+
+        // Save to log file
+        file.appendText("$matchingTime, $trackName, $trackError, $trackMatchTimeStart, $trackMatchTimeEnd \n")
 
         guessTrackLock.unlock()
     }
@@ -326,7 +354,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Calculating fingerprint hash
         var fingerprintHash = 0
         for (id in 0..<frequenciesCount) {
-            // TODO: Rename or better, we can simplify code
             val difference =
                 (fingerprint[id] - fingerprints.first()[id]) - (fingerprint[id + 1] - fingerprints.first()[id + 1])
             if (difference > 0) {
@@ -408,7 +435,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     @SuppressLint("SetTextI18n")
-    private fun updateText() { // TODO: Rename
+    private fun updateUI() {
         // +------------------------------------+
         // | Updating sensor info on the screen |
         // +------------------------------------+
