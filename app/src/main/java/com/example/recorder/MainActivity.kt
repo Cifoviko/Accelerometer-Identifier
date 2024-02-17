@@ -17,6 +17,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import com.google.android.material.snackbar.Snackbar
 import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +55,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var zAccelerometerView: TextView
     private lateinit var trackNameView: TextView
     private lateinit var trackInfoView: TextView
+    private lateinit var startLogButton: Button
     private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
@@ -168,9 +170,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
         trackNameView = findViewById(R.id.trackNameView)
         trackInfoView = findViewById(R.id.trackInfoView)
+        startLogButton = findViewById(R.id.startLogButton)
 
         // Create empty log file
-        file.writeText("Results:\n")
+        file.writeText("${System.currentTimeMillis() / 1000}\n")
+
+        startLogButton.setOnClickListener { view ->
+            // Empty log file
+            val startTime = System.currentTimeMillis() / 1000
+            file.writeText("$startTime\n")
+            Snackbar.make(
+                view,
+                "Started log at $startTime",
+                Snackbar.LENGTH_LONG
+            ).setAction("Action", null).show()
+        }
 
         setupSensors()
 
