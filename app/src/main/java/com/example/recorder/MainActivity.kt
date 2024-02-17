@@ -104,6 +104,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +----------------------+
     private var fingerprintCalculationCount: Int = 0
     private var fingerprintCalculationTime: Duration = ZERO
+    private val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "acc_results.txt")
+
 
     companion object {
         // +---------------------------+
@@ -124,7 +126,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
-        private const val trackMatchThreshold: Int = 8200
+        private const val trackMatchThreshold: Int = 8300
         private const val topMatchesCount: Int = 5
     }
 
@@ -171,9 +173,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         shareButton = findViewById(R.id.shareButton)
 
         // Create empty log file
-        applicationContext.openFileOutput("log.txt", Context.MODE_PRIVATE).use {
-            it.write("".toByteArray())
-        }
+        file.appendText("On create\n")
 
         // Setup save log button
         shareButton.setOnClickListener {
@@ -302,9 +302,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Log.d("DEVEL", logString)
 
         // Save to log file
-        applicationContext.openFileOutput("log.txt", Context.MODE_APPEND).use {
-            it.write("${errors[0]} ${errors[0]} $startTime".toByteArray())
-        }
+        val currentTime = System.currentTimeMillis()/1000
+        file.appendText("$currentTime, $trackName, $trackError, $trackMatchTimeStart, $trackMatchTimeEnd \n")
 
         guessTrackLock.unlock()
     }
