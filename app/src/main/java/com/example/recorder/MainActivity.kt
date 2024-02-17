@@ -2,20 +2,26 @@ package com.example.recorder
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -48,6 +54,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var zAccelerometerView: TextView
     private lateinit var trackNameView: TextView
     private lateinit var trackInfoView: TextView
+    private lateinit var shareButton: Button
     private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
@@ -161,10 +168,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
         trackNameView = findViewById(R.id.trackNameView)
         trackInfoView = findViewById(R.id.trackInfoView)
+        shareButton = findViewById(R.id.shareButton)
 
         // Create empty log file
         applicationContext.openFileOutput("log.txt", Context.MODE_PRIVATE).use {
             it.write("".toByteArray())
+        }
+
+        // Setup save log button
+        shareButton.setOnClickListener {
+            val file = File("log.txt")
+            val sharingIntent = Intent(Intent.ACTION_SEND)
+            sharingIntent.setType("text/*")
+            sharingIntent.putExtra(
+                Intent.EXTRA_STREAM,
+                FileProvider.getUriForFile(
+                    applicationContext,
+                    applicationContext.packageName + ".provider",
+                    file
+                )
+            )
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(sharingIntent, "share file with"))
         }
 
         setupSensors()
@@ -214,7 +239,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-
     private fun dataPointToSeconds(point: Int): Int {
         return (point * blockInputStep / dataHz)
     }
