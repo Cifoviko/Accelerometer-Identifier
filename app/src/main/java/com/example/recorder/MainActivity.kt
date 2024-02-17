@@ -54,7 +54,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var zAccelerometerView: TextView
     private lateinit var trackNameView: TextView
     private lateinit var trackInfoView: TextView
-    private lateinit var shareButton: Button
     private val trackViewLock: ReentrantLock = ReentrantLock()
     private var trackName: String = "Track"
     private var trackError: Int = trackMatchMaxError
@@ -105,7 +104,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var fingerprintCalculationCount: Int = 0
     private var fingerprintCalculationTime: Duration = ZERO
     private val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "acc_results.txt")
-
 
     companion object {
         // +---------------------------+
@@ -170,27 +168,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
         trackNameView = findViewById(R.id.trackNameView)
         trackInfoView = findViewById(R.id.trackInfoView)
-        shareButton = findViewById(R.id.shareButton)
 
         // Create empty log file
-        file.appendText("On create\n")
-
-        // Setup save log button
-        shareButton.setOnClickListener {
-            val file = File("log.txt")
-            val sharingIntent = Intent(Intent.ACTION_SEND)
-            sharingIntent.setType("text/*")
-            sharingIntent.putExtra(
-                Intent.EXTRA_STREAM,
-                FileProvider.getUriForFile(
-                    applicationContext,
-                    applicationContext.packageName + ".provider",
-                    file
-                )
-            )
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            startActivity(Intent.createChooser(sharingIntent, "share file with"))
-        }
+        file.writeText("Results:\n")
 
         setupSensors()
 
@@ -254,8 +234,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
-        // For DEBUG
+        // For statistic
         val startTime: TimeMark = timeSource.markNow()
+        val matchingTime = System.currentTimeMillis() / 1000
 
         val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
@@ -302,8 +283,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Log.d("DEVEL", logString)
 
         // Save to log file
-        val currentTime = System.currentTimeMillis()/1000
-        file.appendText("$currentTime, $trackName, $trackError, $trackMatchTimeStart, $trackMatchTimeEnd \n")
+        file.appendText("$matchingTime, $trackName, $trackError, $trackMatchTimeStart, $trackMatchTimeEnd \n")
 
         guessTrackLock.unlock()
     }
