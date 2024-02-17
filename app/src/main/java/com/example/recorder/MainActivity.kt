@@ -8,6 +8,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.paramsen.noise.Noise
@@ -147,6 +148,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Keep screen on for long tests
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         trackMatchTimestamp = timeSource.markNow()
 
