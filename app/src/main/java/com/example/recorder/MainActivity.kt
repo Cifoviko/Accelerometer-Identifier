@@ -1,20 +1,27 @@
 package com.example.recorder
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.paramsen.noise.Noise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -96,6 +103,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +----------------------+
     private var fingerprintCalculationCount: Int = 0
     private var fingerprintCalculationTime: Duration = ZERO
+    private val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "acc_results.txt")
 
     companion object {
         // +---------------------------+
@@ -116,7 +124,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val powerSpectrumFloor: Double = 1e-100
         private const val fingerprintMatchingSize: Int = 768
         private const val trackMatchMaxError: Int = 32 * fingerprintMatchingSize
-        private const val trackMatchThreshold: Int = 8200
+        private const val trackMatchThreshold: Int = 8300
         private const val topMatchesCount: Int = 5
     }
 
@@ -160,6 +168,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         zAccelerometerView = findViewById(R.id.zAccelerometerView)
         trackNameView = findViewById(R.id.trackNameView)
         trackInfoView = findViewById(R.id.trackInfoView)
+
+        // Create empty log file
+        file.writeText("Results:\n")
 
         setupSensors()
 
@@ -208,7 +219,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // +------------------------------------------------------------------------------------------+
     // | ================================ Private methods ======================================= |
     // +------------------------------------------------------------------------------------------+
-
     private fun dataPointToSeconds(point: Int): Int {
         return (point * blockInputStep / dataHz)
     }
@@ -224,8 +234,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         Log.d("DEVEL", "guessTrack on thread: ${Thread.currentThread().name}")
 
-        // For DEBUG
+        // For statistic
         val startTime: TimeMark = timeSource.markNow()
+        val matchingTime = System.currentTimeMillis() / 1000
 
         val tracks: Array<String> = Array(topMatchesCount) { "NONE" }
         val errors = IntArray(topMatchesCount) { trackMatchMaxError }
@@ -270,6 +281,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         logString += "\nTime spent: ${startTime.elapsedNow()}"
         Log.d("DEVEL", logString)
+
+        // Save to log file
+        file.appendText("$matchingTime, $trackName, $trackError, $trackMatchTimeStart, $trackMatchTimeEnd \n")
 
         guessTrackLock.unlock()
     }
