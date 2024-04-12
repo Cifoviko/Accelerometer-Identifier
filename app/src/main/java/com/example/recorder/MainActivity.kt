@@ -485,7 +485,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // | <- referenceData               |
         // +--------------------------------+
 
-        val dataHzList = listOf(400, 415, 435, 470, 500)
+        val dataHzList = listOf(400, 415, 420, 435, 470, 500)
 
         var closestHz: Int = dataHzList[0]
         for (hz in dataHzList) {
@@ -520,6 +520,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             435 -> {
                 resource = resources.openRawResource(R.raw.reference_data_435hz)
+            }
+
+            420 -> {
+                resource = resources.openRawResource(R.raw.reference_data_420hz)
             }
 
             415 -> {
